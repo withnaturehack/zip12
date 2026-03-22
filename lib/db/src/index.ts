@@ -4,13 +4,21 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-const connectionString = process.env.NEON_DATABASE_URL
-  ? `${process.env.NEON_DATABASE_URL}`
-  : process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("DATABASE_URL (or NEON_DATABASE_URL) must be set. Did you forget to provision a database?");
+function buildConnectionString(): string {
+  if (process.env.NEON_DB_PASSWORD) {
+    const pass = encodeURIComponent(process.env.NEON_DB_PASSWORD);
+    return `postgresql://neondb_owner:${pass}@ep-little-haze-ant4ajfa-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require`;
+  }
+  if (process.env.NEON_DATABASE_URL && process.env.NEON_DATABASE_URL.startsWith("postgresql://")) {
+    return process.env.NEON_DATABASE_URL;
+  }
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL (or NEON_DB_PASSWORD) must be set. Did you forget to provision a database?");
+  }
+  return process.env.DATABASE_URL;
 }
+
+const connectionString = buildConnectionString();
 
 export const pool = new Pool({
   connectionString,
