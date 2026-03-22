@@ -1,7 +1,10 @@
 module.exports = ({ config }) => {
+  // EXPO_PUBLIC_API_URL is explicitly set in eas.json for all EAS builds.
+  // It is also set in .env for local dev. This is the primary source for native API URL.
+  const explicitApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  // Replit-specific domains (only available in Replit dev environment, not in EAS builds)
   const expoDevDomain = process.env.REPLIT_EXPO_DEV_DOMAIN;
-  // REPLIT_INTERNAL_APP_DOMAIN is not available in Cloud Run — use REPLIT_DOMAINS instead.
-  // REPLIT_DOMAINS is a comma-separated list set by Replit in both dev and deployed environments.
   const replitDomains = process.env.REPLIT_DOMAINS;
   const prodDomain =
     (replitDomains ? replitDomains.split(",")[0].trim() : null) ||
@@ -15,20 +18,21 @@ module.exports = ({ config }) => {
     return `https://${domain.trim()}`;
   }
 
+  // proxyUrl is used by expo-router for deep linking origin.
   const proxyUrl =
     safeUrl(expoDevDomain) ||
     safeUrl(prodDomain) ||
     safeUrl(devDomain) ||
+    (explicitApiUrl ? explicitApiUrl.replace(/\/api$/, "") : null) ||
     "https://localhost";
 
-  // API URL priority: prod domain > expo dev domain > dev domain > env var > localhost
-  // Web (browser) builds always use /api (relative) via the Metro proxy — see AuthContext.tsx.
-  // This absolute URL is only used by native (Expo Go / EAS APK).
+  // apiUrl for native (web always uses relative /api via Metro proxy — see AuthContext.tsx).
+  // Priority: explicit env var (EAS build) > Replit dev expo domain > Replit dev domain > localhost
   const apiUrl =
-    (prodDomain ? `https://${prodDomain}/api` : null) ||
+    explicitApiUrl ||
     (expoDevDomain ? `https://${expoDevDomain}/api` : null) ||
+    (prodDomain ? `https://${prodDomain}/api` : null) ||
     (devDomain ? `https://${devDomain}/api` : null) ||
-    process.env.EXPO_PUBLIC_API_URL ||
     "http://localhost:8080/api";
 
   return {
