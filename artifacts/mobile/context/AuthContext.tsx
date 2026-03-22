@@ -1,9 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import Constants from "expo-constants";
 
-const API_BASE =
+const API_BASE: string =
+  (Constants.expoConfig?.extra?.apiUrl as string) ||
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://awesome-animation-works--kaludin1524.replit.app/api";
+  "http://localhost:8080/api";
 
 export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin";
 
