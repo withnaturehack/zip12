@@ -16,7 +16,9 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "in.iitm.campusops"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -33,6 +35,16 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiUrl": "https://e8e612f8-a84e-4447-a670-cb01763d33e2-00-66pn7uj8f72d.expo.pike.replit.dev/api",
+      "router": {
+        "origin": "https://e8e612f8-a84e-4447-a670-cb01763d33e2-00-66pn7uj8f72d.expo.pike.replit.dev",
+        "headOrigin": "https://e8e612f8-a84e-4447-a670-cb01763d33e2-00-66pn7uj8f72d.expo.pike.replit.dev"
+      },
+      "eas": {
+        "projectId": "8da3ea5b-4245-4459-91f6-3f6a7e49926c"
+      }
     }
   }
 }
