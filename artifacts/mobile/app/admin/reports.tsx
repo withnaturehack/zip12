@@ -8,12 +8,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "";
+const API_BASE: string = (Constants.expoConfig?.extra?.apiUrl as string) || process.env.EXPO_PUBLIC_API_URL || "/api";
 
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();

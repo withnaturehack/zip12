@@ -2,9 +2,23 @@ import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View, Text, useColorScheme } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useApiRequest } from "@/context/AuthContext";
+
+function BellWithBadge({ color, unreadCount }: { color: string; unreadCount: number }) {
+  return (
+    <View style={{ width: 26, height: 26 }}>
+      <Feather name="bell" size={22} color={color} />
+      {unreadCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -13,8 +27,21 @@ export default function TabLayout() {
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const { user } = useAuth();
+  const request = useApiRequest();
   const role = user?.role;
   const isStudent = role === "student";
+
+  const { data: notifications } = useQuery<any[]>({
+    queryKey: ["notifications"],
+    queryFn: () => request("/notifications"),
+    enabled: isStudent && !!user,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+
+  const unreadCount = isStudent
+    ? (notifications?.filter((n: any) => !n.isRead).length ?? 0)
+    : 0;
 
   return (
     <Tabs
@@ -64,7 +91,8 @@ export default function TabLayout() {
         name="notifications"
         options={{
           title: "Alerts",
-          tabBarIcon: ({ color }) => <Feather name="bell" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <BellWithBadge color={color} unreadCount={unreadCount} />,
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
       <Tabs.Screen
@@ -77,3 +105,24 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    backgroundColor: "#ef4444",
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+    lineHeight: 16,
+  },
+});

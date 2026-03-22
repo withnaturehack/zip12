@@ -3,6 +3,7 @@ import {
   usersTable,
   hostelsTable,
   announcementsTable,
+  notificationsTable,
   emergencyContactsTable,
   studentInventoryTable,
 } from "@workspace/db";
@@ -161,19 +162,46 @@ export async function autoSeed() {
       console.log("[seed] Emergency contacts created");
     }
 
-    // --- Announcements ---
+    // --- Announcements + Notifications ---
     const [{ count: annCount }] = await db.select({ count: count() }).from(announcementsTable);
     if (Number(annCount) === 0) {
       const [admin] = await db.select().from(usersTable).where(eq(usersTable.email, "admin@iitm.ac.in"));
       if (admin) {
-        await db.insert(announcementsTable).values([
+        const announcementsData = [
           { id: generateId(), title: "Welcome to CampusOps!", content: "Your centralized portal for hostel management, attendance tracking, inventory, and campus communications.", category: "general", createdBy: admin.id },
           { id: generateId(), title: "Mess Timings — March 2026", content: "Mess A & B: Breakfast 7:00–9:00 AM | Lunch 12:00–2:00 PM | Dinner 7:00–9:30 PM\nMess C: Breakfast 7:30–9:30 AM | Lunch 12:30–2:30 PM | Dinner 7:30–10:00 PM", category: "hostel", createdBy: admin.id },
           { id: generateId(), title: "Semester Registration Open", content: "BS Program semester registration is now open. Deadline: March 30, 2026. Visit the IITM portal to register.", category: "academic", createdBy: admin.id },
           { id: generateId(), title: "Hostel Inventory Drive", content: "All students must submit mattress, bedsheet, and pillow details by March 25. Contact your hostel volunteer.", category: "hostel", createdBy: admin.id },
           { id: generateId(), title: "Campus Wi-Fi Upgrade", content: "Campus Wi-Fi infrastructure upgrade scheduled for March 22, 2:00–6:00 AM. Brief outages expected.", category: "general", createdBy: admin.id },
-        ]);
+        ];
+        await db.insert(announcementsTable).values(announcementsData);
         console.log("[seed] Announcements created");
+
+        // Create notification records for every student for each announcement
+        const students = await db.select({ id: usersTable.id })
+          .from(usersTable).where(eq(usersTable.role, "student"));
+
+        if (students.length > 0) {
+          const notifValues: any[] = [];
+          for (const ann of announcementsData) {
+            for (const s of students) {
+              notifValues.push({
+                id: generateId(),
+                userId: s.id,
+                title: `Admin IITM: ${ann.title}`,
+                body: ann.content.substring(0, 120),
+                type: "announcement",
+                isRead: "false",
+                refId: ann.id,
+              });
+            }
+          }
+          // Insert in batches of 100 to avoid query size limits
+          for (let i = 0; i < notifValues.length; i += 100) {
+            await db.insert(notificationsTable).values(notifValues.slice(i, i + 100));
+          }
+          console.log(`[seed] Created ${notifValues.length} notification records for ${students.length} students`);
+        }
       }
     }
 

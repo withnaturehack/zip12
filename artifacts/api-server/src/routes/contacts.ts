@@ -5,13 +5,16 @@ import { requireAuth, requireAdmin, generateId, AuthRequest } from "../lib/auth.
 
 const router = Router();
 
-// GET /api/hostel/contacts
+// GET /api/hostel/contacts?hostelId=xxx
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
+  // Use query param hostelId if provided, otherwise fall back to the caller's own hostelId
+  const queryHostelId = req.query.hostelId as string | undefined;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  // Return all contacts: global ones (hostelId="") + user's hostel-specific ones
+  const targetHostelId = queryHostelId || user?.hostelId || "";
+
   const allContacts = await db.select().from(emergencyContactsTable);
   const contacts = allContacts.filter(c =>
-    !c.hostelId || c.hostelId === "" || c.hostelId === user?.hostelId
+    !c.hostelId || c.hostelId === "" || c.hostelId === targetHostelId
   );
   res.json(contacts.map(c => ({ ...c, isAvailable24x7: c.isAvailable24x7 === "true" })));
 });

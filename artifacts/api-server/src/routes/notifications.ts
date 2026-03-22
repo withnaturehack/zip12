@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, notificationsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../lib/auth.js";
 
 const router = Router();
@@ -25,6 +25,15 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       createdAt: n.createdAt.toISOString(),
     }))
   );
+});
+
+// PATCH /api/notifications/read-all — mark all as read for the user
+router.patch("/read-all", requireAuth, async (req: AuthRequest, res) => {
+  await db
+    .update(notificationsTable)
+    .set({ isRead: "true" })
+    .where(and(eq(notificationsTable.userId, req.userId!), eq(notificationsTable.isRead, "false")));
+  res.json({ success: true });
 });
 
 // PATCH /api/notifications/:id/read

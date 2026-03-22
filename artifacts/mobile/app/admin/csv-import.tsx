@@ -8,10 +8,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "";
+const API_BASE: string = (Constants.expoConfig?.extra?.apiUrl as string) || process.env.EXPO_PUBLIC_API_URL || "/api";
 
 type ImportType = "students" | "mess" | "hostel-assignment";
 

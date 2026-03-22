@@ -36,7 +36,7 @@ function timeAgo(date: string) {
 
 // ─── Student Notifications View ───────────────────────────────────────────────
 
-function StudentNotifications({ theme, user }: { theme: any; user: any }) {
+function StudentNotifications({ theme, user, onUnreadCount }: { theme: any; user: any; onUnreadCount?: (n: number) => void }) {
   const request = useApiRequest();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = React.useState(false);
@@ -51,6 +51,14 @@ function StudentNotifications({ theme, user }: { theme: any; user: any }) {
   const markReadMutation = useMutation({
     mutationFn: (id: string) => request(`/notifications/${id}/read`, { method: "PATCH" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => request("/notifications/read-all", { method: "PATCH" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
   });
 
   const onRefresh = async () => {
@@ -99,7 +107,7 @@ function StudentNotifications({ theme, user }: { theme: any; user: any }) {
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={{ paddingBottom: 100 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       showsVerticalScrollIndicator={false}
     >
@@ -112,22 +120,32 @@ function StudentNotifications({ theme, user }: { theme: any; user: any }) {
           <Feather name="bell-off" size={48} color={theme.textTertiary} />
           <Text style={[styles.emptyTitle, { color: theme.text }]}>All caught up!</Text>
           <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-            You have no notifications right now.
+            You have no notifications right now. Staff will send you updates here.
           </Text>
         </View>
       ) : (
         <>
           {unread.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-                New · {unread.length}
-              </Text>
+              <View style={styles.sectionRow}>
+                <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+                  New · {unread.length}
+                </Text>
+                <Pressable
+                  onPress={() => markAllReadMutation.mutate()}
+                  disabled={markAllReadMutation.isPending}
+                  style={[styles.markAllBtn, { borderColor: theme.border }]}
+                >
+                  <Feather name="check-circle" size={13} color={theme.tint} />
+                  <Text style={[styles.markAllText, { color: theme.tint }]}>Mark all read</Text>
+                </Pressable>
+              </View>
               {unread.map((n: any) => <NotifItem key={n.id} n={n} />)}
             </View>
           )}
           {read.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Earlier</Text>
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20 }]}>Earlier</Text>
               {read.map((n: any) => <NotifItem key={n.id} n={n} />)}
             </View>
           )}
@@ -253,7 +271,10 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 12 },
   pageTitle: { fontSize: 28, fontFamily: "Inter_700Bold", marginBottom: 8 },
   section: { marginBottom: 16 },
-  sectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", paddingHorizontal: 20, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
+  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 },
+  sectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
+  markAllBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+  markAllText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   notifCard: { marginHorizontal: 20, marginBottom: 8 },
   notifRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   notifIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", flexShrink: 0 },
