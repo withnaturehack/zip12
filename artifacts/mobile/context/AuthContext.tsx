@@ -1,11 +1,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
+// On web (browser): use relative /api — Metro proxy forwards it to the API server.
+// This works identically in dev and in deployment without needing to know the domain.
+// On native (Expo Go / APK): use the absolute URL from app config or env.
 const API_BASE: string =
-  (Constants.expoConfig?.extra?.apiUrl as string) ||
-  process.env.EXPO_PUBLIC_API_URL ||
-  "http://localhost:8080/api";
+  Platform.OS === "web"
+    ? "/api"
+    : (Constants.expoConfig?.extra?.apiUrl as string) ||
+      process.env.EXPO_PUBLIC_API_URL ||
+      "http://localhost:8080/api";
 
 export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin";
 

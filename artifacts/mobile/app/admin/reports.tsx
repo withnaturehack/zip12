@@ -14,7 +14,12 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
-const API_BASE: string = (Constants.expoConfig?.extra?.apiUrl as string) || process.env.EXPO_PUBLIC_API_URL || "/api";
+const API_BASE: string =
+  Platform.OS === "web"
+    ? "/api"
+    : (Constants.expoConfig?.extra?.apiUrl as string) ||
+      process.env.EXPO_PUBLIC_API_URL ||
+      "http://localhost:8080/api";
 
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();

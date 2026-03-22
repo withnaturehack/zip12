@@ -12,7 +12,11 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "";
+const API_BASE: string =
+  Platform.OS === "web"
+    ? "/api"
+    : process.env.EXPO_PUBLIC_API_URL ||
+      "http://localhost:8080/api";
 
 const LOG_TYPES: Record<string, { icon: string; color: string; label: string }> = {
   active:    { icon: "sun",           color: "#22c55e", label: "Went Active" },

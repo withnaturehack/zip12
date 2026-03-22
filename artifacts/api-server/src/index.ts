@@ -1,40 +1,44 @@
-import cluster from "cluster";
-import os from "os";
-import app from "./app.js";
-import { autoSeed } from "./autoSeed.js";
+import express from "express";
+import cors from "cors";
 
-const rawPort = process.env["PORT"];
+const app = express();
 
-if (!rawPort) {
-  throw new Error("PORT environment variable is required but was not provided.");
-}
+// ✅ Middleware
+app.use(cors());
+app.use(express.json());
 
-const port = Number(rawPort);
+// ✅ Health check (VERY IMPORTANT for testing)
+app.get("/", (req, res) => {
+  res.json({ message: "API is running 🚀" });
+});
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+// ✅ LOGIN ROUTE (FINAL)
+app.post("/api/login", (req, res) => {
+  const { email, password } = req.body;
 
-const numCPUs = os.cpus().length;
-
-if (cluster.isPrimary && numCPUs > 1) {
-  console.log(`[Cluster] Primary ${process.pid} starting ${numCPUs} workers`);
-
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
+  // Demo user (you can replace with DB later)
+  if (email === "
+      
+        
+      
+        volunteer@iitm.ac.in
+ 
+      
+    " && password === "123456") {
+    return res.json({
+      success: true,
+      user: {
+        id: "1",
+        email,
+        role: "volunteer",
+      },
+    });
   }
 
-  cluster.on("exit", (worker, code, signal) => {
-    console.warn(`[Cluster] Worker ${worker.process.pid} died (${signal || code}). Restarting…`);
-    cluster.fork();
+  return res.status(401).json({
+    success: false,
+    message: "Invalid credentials",
   });
+});
 
-  // Only the primary runs autoSeed
-  (async () => {
-    await autoSeed();
-  })();
-} else {
-  app.listen(port, () => {
-    console.log(`[Worker ${process.pid}] Listening on port ${port}`);
-  });
-}
+export default app;
