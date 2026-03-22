@@ -22,11 +22,11 @@ const connectionString = buildConnectionString();
 
 export const pool = new Pool({
   connectionString,
-  max: 50,
-  min: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 8000,
-  allowExitOnIdle: false,
+  max: 10,
+  min: 0,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
+  allowExitOnIdle: true,
 });
 
 pool.on("error", (err) => {
