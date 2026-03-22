@@ -1,44 +1,21 @@
-import express from "express";
-import cors from "cors";
+import cluster from "cluster";
+import { cpus } from "os";
+import app from "./app.js";
+import { autoSeed } from "./autoSeed.js";
 
-const app = express();
+const PORT = Number(process.env.PORT) || 8080;
+const WORKERS = process.env.NODE_ENV === "development" ? cpus().length : 4;
 
-// ✅ Middleware
-app.use(cors());
-app.use(express.json());
-
-// ✅ Health check (VERY IMPORTANT for testing)
-app.get("/", (req, res) => {
-  res.json({ message: "API is running 🚀" });
-});
-
-// ✅ LOGIN ROUTE (FINAL)
-app.post("/api/login", (req, res) => {
-  const { email, password } = req.body;
-
-  // Demo user (you can replace with DB later)
-  if (email === "
-      
-        
-      
-        volunteer@iitm.ac.in
- 
-      
-    " && password === "123456") {
-    return res.json({
-      success: true,
-      user: {
-        id: "1",
-        email,
-        role: "volunteer",
-      },
-    });
-  }
-
-  return res.status(401).json({
-    success: false,
-    message: "Invalid credentials",
+if (cluster.isPrimary) {
+  console.log(`[Cluster] Primary ${process.pid} starting ${WORKERS} workers`);
+  for (let i = 0; i < WORKERS; i++) cluster.fork();
+  cluster.on("exit", (worker) => {
+    console.log(`[Cluster] Worker ${worker.process.pid} died, restarting...`);
+    cluster.fork();
   });
-});
-
-export default app;
+} else {
+  app.listen(PORT, () => {
+    console.log(`[Worker ${process.pid}] Listening on port ${PORT}`);
+  });
+  autoSeed().catch(console.error);
+}
