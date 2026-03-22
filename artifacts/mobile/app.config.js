@@ -1,13 +1,18 @@
 module.exports = ({ config }) => {
   const expoDevDomain = process.env.REPLIT_EXPO_DEV_DOMAIN;
+  const prodDomain = process.env.REPLIT_INTERNAL_APP_DOMAIN;
+  const devDomain = process.env.REPLIT_DEV_DOMAIN;
+
   const proxyUrl =
     process.env.EXPO_PACKAGER_PROXY_URL ||
+    (prodDomain ? `https://${prodDomain}` : null) ||
     (expoDevDomain ? `https://${expoDevDomain}` : "https://replit.com/");
 
-  // API URL: use the Expo domain (Metro will proxy /api → localhost:8080)
-  // For native/physical device: falls back to the main Replit dev domain
-  const devDomain = process.env.REPLIT_DEV_DOMAIN;
-  const apiUrl = expoDevDomain
+  // API URL priority: production domain > dev expo domain > dev domain > env var > localhost
+  // Metro always proxies /api/* to the Express server on port 8080
+  const apiUrl = prodDomain
+    ? `https://${prodDomain}/api`
+    : expoDevDomain
     ? `https://${expoDevDomain}/api`
     : devDomain
     ? `https://${devDomain}/api`
