@@ -1,22 +1,35 @@
 module.exports = ({ config }) => {
   const expoDevDomain = process.env.REPLIT_EXPO_DEV_DOMAIN;
-  const prodDomain = process.env.REPLIT_INTERNAL_APP_DOMAIN;
+  // REPLIT_INTERNAL_APP_DOMAIN is not available in Cloud Run — use REPLIT_DOMAINS instead.
+  // REPLIT_DOMAINS is a comma-separated list set by Replit in both dev and deployed environments.
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  const prodDomain =
+    (replitDomains ? replitDomains.split(",")[0].trim() : null) ||
+    process.env.REPLIT_INTERNAL_APP_DOMAIN ||
+    null;
   const devDomain = process.env.REPLIT_DEV_DOMAIN;
 
-  const proxyUrl =
-    process.env.EXPO_PACKAGER_PROXY_URL ||
-    (prodDomain ? `https://${prodDomain}` : null) ||
-    (expoDevDomain ? `https://${expoDevDomain}` : "https://replit.com/");
+  // Build a safe proxy URL — never produce "https://" with an empty host.
+  function safeUrl(domain) {
+    if (!domain || !domain.trim()) return null;
+    return `https://${domain.trim()}`;
+  }
 
-  // API URL priority: production domain > dev expo domain > dev domain > env var > localhost
-  // Metro always proxies /api/* to the Express server on port 8080
-  const apiUrl = prodDomain
-    ? `https://${prodDomain}/api`
-    : expoDevDomain
-    ? `https://${expoDevDomain}/api`
-    : devDomain
-    ? `https://${devDomain}/api`
-    : process.env.EXPO_PUBLIC_API_URL || "http://localhost:8080/api";
+  const proxyUrl =
+    safeUrl(expoDevDomain) ||
+    safeUrl(prodDomain) ||
+    safeUrl(devDomain) ||
+    "https://localhost";
+
+  // API URL priority: prod domain > expo dev domain > dev domain > env var > localhost
+  // Web (browser) builds always use /api (relative) via the Metro proxy — see AuthContext.tsx.
+  // This absolute URL is only used by native (Expo Go / EAS APK).
+  const apiUrl =
+    (prodDomain ? `https://${prodDomain}/api` : null) ||
+    (expoDevDomain ? `https://${expoDevDomain}/api` : null) ||
+    (devDomain ? `https://${devDomain}/api` : null) ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    "http://localhost:8080/api";
 
   return {
     ...config,
