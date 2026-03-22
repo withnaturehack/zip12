@@ -136,10 +136,16 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
 
   console.log("Starting Metro...");
   console.log(`Setting EXPO_PUBLIC_DOMAIN=${expoPublicDomain}`);
+
+  // In production builds, the API is served from the same domain via /api proxy
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL || `https://${expoPublicDomain}/api`;
+  console.log(`Setting EXPO_PUBLIC_API_URL=${apiUrl}`);
+
   const env = {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
+    EXPO_PUBLIC_API_URL: apiUrl,
   };
 
   if (expoPublicReplId) {

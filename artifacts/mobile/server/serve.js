@@ -1,10 +1,11 @@
 /**
  * Standalone production server for Expo static builds.
  *
- * Serves the output of build.js (static-build/) with two special routes:
+ * Serves the output of build.js (static-build/) with:
+ * - /api/* → proxied to the Express API server on port 8080
  * - GET / or /manifest with expo-platform header → platform manifest JSON
  * - GET / without expo-platform → landing page HTML
- * Everything else falls through to static file serving from ./static-build/.
+ * - Everything else → static file from ./static-build/
  *
  * Zero external dependencies — uses only Node.js built-ins (http, fs, path).
  */
@@ -12,6 +13,8 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+
+const API_PORT = parseInt(process.env.API_PORT || "8080", 10);
 
 const STATIC_ROOT = path.resolve(__dirname, "..", "static-build");
 const TEMPLATE_PATH = path.resolve(__dirname, "templates", "landing-page.html");
@@ -104,6 +107,29 @@ function serveStaticFile(urlPath, res) {
   res.end(content);
 }
 
+function proxyToApi(req, res) {
+  const options = {
+    hostname: "127.0.0.1",
+    port: API_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: `localhost:${API_PORT}` },
+  };
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
+  });
+
+  proxyReq.on("error", (err) => {
+    console.error("[proxy] API error:", err.message);
+    res.writeHead(502, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "API server unavailable" }));
+  });
+
+  req.pipe(proxyReq, { end: true });
+}
+
 const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 const appName = getAppName();
 
@@ -113,6 +139,11 @@ const server = http.createServer((req, res) => {
 
   if (basePath && pathname.startsWith(basePath)) {
     pathname = pathname.slice(basePath.length) || "/";
+  }
+
+  // Proxy all /api/* requests to the Express API server
+  if (pathname.startsWith("/api/") || pathname === "/api") {
+    return proxyToApi(req, res);
   }
 
   if (pathname === "/" || pathname === "/manifest") {
