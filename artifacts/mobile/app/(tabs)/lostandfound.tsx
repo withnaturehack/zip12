@@ -244,6 +244,7 @@ function MessAttendanceView({ theme }: { theme: any }) {
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const today = new Date().toISOString().split("T")[0];
 
   const { data: students = [], isLoading: studLoading, refetch: refetchStudents } = useQuery<any[]>({
@@ -271,6 +272,16 @@ function MessAttendanceView({ theme }: { theme: any }) {
     if (!messMap[r.studentId]) messMap[r.studentId] = {};
     messMap[r.studentId][r.meal as Meal] = r.present === true;
   });
+
+  const sq = search.trim().toLowerCase();
+  const filteredStudents = sq
+    ? (students as any[]).filter(s =>
+        s.name?.toLowerCase().includes(sq) ||
+        s.roomNumber?.toLowerCase().includes(sq) ||
+        s.rollNumber?.toLowerCase().includes(sq) ||
+        s.email?.toLowerCase().includes(sq)
+      )
+    : (students as any[]);
 
   const markedBreakfast = Object.values(messMap).filter(m => m.breakfast).length;
   const markedLunch = Object.values(messMap).filter(m => m.lunch).length;
@@ -314,6 +325,24 @@ function MessAttendanceView({ theme }: { theme: any }) {
         </View>
       </View>
 
+      {/* Search bar */}
+      <View style={[styles.searchBarWrap, { borderBottomColor: theme.border }]}>
+        <Feather name="search" size={15} color={theme.textSecondary} />
+        <TextInput
+          placeholder="Search by name, room, roll…"
+          placeholderTextColor={theme.textTertiary}
+          value={search}
+          onChangeText={setSearch}
+          style={[styles.searchBarInput, { color: theme.text }]}
+          clearButtonMode="while-editing"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")}>
+            <Feather name="x-circle" size={15} color={theme.textSecondary} />
+          </Pressable>
+        )}
+      </View>
+
       {/* Table header */}
       <View style={[styles.messTableHead, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <Text style={[styles.messThName, { color: theme.textSecondary }]}>STUDENT</Text>
@@ -330,7 +359,7 @@ function MessAttendanceView({ theme }: { theme: any }) {
         <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
       ) : (
         <FlatList
-          data={students as any[]}
+          data={filteredStudents}
           keyExtractor={item => item.id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
           contentContainerStyle={{ paddingBottom: 120 }}
@@ -338,7 +367,9 @@ function MessAttendanceView({ theme }: { theme: any }) {
           ListEmptyComponent={() => (
             <View style={styles.emptyState}>
               <Feather name="coffee" size={40} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No students assigned</Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                {search ? "No students match your search" : "No students assigned"}
+              </Text>
             </View>
           )}
           renderItem={({ item }) => {
@@ -393,6 +424,8 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [updatingInv, setUpdatingInv] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [checkingOutId, setCheckingOutId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const today = new Date().toISOString().split("T")[0];
 
   const { data = [], isLoading, refetch } = useQuery<any[]>({
@@ -454,6 +487,29 @@ function RoomAttendanceView({ theme }: { theme: any }) {
     setCheckingInId(null);
   }, [request, qc]);
 
+  const markCheckout = useCallback(async (checkinId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCheckingOutId(checkinId);
+    try {
+      await request(`/checkins/${checkinId}/checkout`, { method: "PATCH" });
+      qc.invalidateQueries({ queryKey: ["checkins-today"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to mark check-out");
+    }
+    setCheckingOutId(null);
+  }, [request, qc]);
+
+  const sq = search.trim().toLowerCase();
+  const filtered = sq
+    ? (data as any[]).filter(s =>
+        s.name?.toLowerCase().includes(sq) ||
+        s.roomNumber?.toLowerCase().includes(sq) ||
+        s.rollNumber?.toLowerCase().includes(sq) ||
+        s.email?.toLowerCase().includes(sq)
+      )
+    : (data as any[]);
+
   const entered = data.filter((s: any) => s.attendance?.status === "entered").length;
   const checkedInCount = Object.keys(checkinMap).length;
   const total = data.length;
@@ -468,11 +524,29 @@ function RoomAttendanceView({ theme }: { theme: any }) {
         <StatPill label="Pending" value={total - entered} color="#f59e0b" theme={theme} />
       </View>
 
+      {/* Search bar */}
+      <View style={[styles.searchBarWrap, { borderBottomColor: theme.border }]}>
+        <Feather name="search" size={15} color={theme.textSecondary} />
+        <TextInput
+          placeholder="Search by name, room, roll…"
+          placeholderTextColor={theme.textTertiary}
+          value={search}
+          onChangeText={setSearch}
+          style={[styles.searchBarInput, { color: theme.text }]}
+          clearButtonMode="while-editing"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")}>
+            <Feather name="x-circle" size={15} color={theme.textSecondary} />
+          </Pressable>
+        )}
+      </View>
+
       {isLoading ? (
         <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
       ) : (
         <FlatList
-          data={data as any[]}
+          data={filtered}
           keyExtractor={item => item.id}
           contentContainerStyle={{ padding: 10, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
@@ -480,18 +554,23 @@ function RoomAttendanceView({ theme }: { theme: any }) {
           ListEmptyComponent={() => (
             <View style={styles.emptyState}>
               <Feather name="users" size={48} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No students assigned</Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                {search ? "No students match your search" : "No students assigned"}
+              </Text>
             </View>
           )}
           renderItem={({ item }) => {
             const isEntered = item.attendance?.status === "entered";
             const isUpdating = updatingId === item.id;
             const isCheckingIn = checkingInId === item.id;
+            const isCheckingOut = checkingOutId === checkinMap[item.id]?.id;
             const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false };
             const checkin = checkinMap[item.id];
+            const hasCheckout = !!checkin?.checkOutTime;
 
             return (
               <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: isEntered ? "#22c55e40" : theme.border }]}>
+                {/* Student info + attendance toggle */}
                 <View style={styles.attTopRow}>
                   <View style={[styles.avatar, { backgroundColor: theme.tint + "20" }]}>
                     <Text style={[styles.avatarText, { color: theme.tint }]}>
@@ -500,7 +579,9 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-                    <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>{item.email}</Text>
+                    <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
+                    </Text>
                     {(item.contactNumber || item.phone) ? (
                       <Text style={[styles.studentMeta, { color: theme.textTertiary }]}>
                         <Feather name="phone" size={10} /> {item.contactNumber || item.phone}
@@ -518,33 +599,63 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                   </Pressable>
                 </View>
 
+                {/* Check-in / Check-out section */}
                 <View style={[styles.checkinRow, { borderTopColor: theme.border }]}>
-                  <View style={[styles.checkinIcon, { backgroundColor: checkin ? "#8b5cf620" : theme.surface }]}>
-                    <Feather name="log-in" size={13} color={checkin ? "#8b5cf6" : theme.textTertiary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    {checkin ? (
-                      <Text style={[styles.checkinTime, { color: "#8b5cf6" }]}>
-                        Checked in at {formatTime(checkin.checkInTime)}
-                        {checkin.checkOutTime ? `  ·  Out: ${formatTime(checkin.checkOutTime)}` : ""}
-                      </Text>
-                    ) : (
-                      <Text style={[styles.checkinNone, { color: theme.textTertiary }]}>Not checked in today</Text>
-                    )}
-                  </View>
-                  {!checkin && (
-                    <Pressable
-                      onPress={() => markCheckin(item.id)}
-                      disabled={isCheckingIn}
-                      style={[styles.checkinBtn, { borderColor: "#8b5cf640", backgroundColor: "#8b5cf615" }]}
-                    >
-                      {isCheckingIn
-                        ? <ActivityIndicator size="small" color="#8b5cf6" />
-                        : <Text style={[styles.checkinBtnText, { color: "#8b5cf6" }]}>Mark</Text>}
-                    </Pressable>
+                  {!checkin ? (
+                    /* No check-in yet → show Check In button */
+                    <>
+                      <Feather name="log-in" size={13} color={theme.textTertiary} />
+                      <Text style={[styles.checkinNone, { color: theme.textTertiary, flex: 1 }]}>Not checked in today</Text>
+                      <Pressable
+                        onPress={() => markCheckin(item.id)}
+                        disabled={isCheckingIn}
+                        style={[styles.checkinBtn, { borderColor: "#8b5cf640", backgroundColor: "#8b5cf615" }]}
+                      >
+                        {isCheckingIn
+                          ? <ActivityIndicator size="small" color="#8b5cf6" />
+                          : <><Feather name="log-in" size={12} color="#8b5cf6" /><Text style={[styles.checkinBtnText, { color: "#8b5cf6" }]}> Check In</Text></>}
+                      </Pressable>
+                    </>
+                  ) : hasCheckout ? (
+                    /* Both check-in and check-out done → show proof */
+                    <View style={[styles.proofBanner, { backgroundColor: "#22c55e12", borderColor: "#22c55e30" }]}>
+                      <Feather name="check-circle" size={14} color="#22c55e" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.checkinTime, { color: "#22c55e" }]}>
+                          In: {formatTime(checkin.checkInTime)}
+                        </Text>
+                        <Text style={[styles.checkinTime, { color: "#22c55e" }]}>
+                          Out: {formatTime(checkin.checkOutTime)}
+                        </Text>
+                      </View>
+                      <View style={[styles.proofTag, { backgroundColor: "#22c55e20" }]}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#22c55e" }}>PROOF</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    /* Checked in but not out → show time + Check Out button */
+                    <>
+                      <View style={[styles.checkinIcon, { backgroundColor: "#8b5cf620" }]}>
+                        <Feather name="log-in" size={13} color="#8b5cf6" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.checkinTime, { color: "#8b5cf6" }]}>In: {formatTime(checkin.checkInTime)}</Text>
+                        <Text style={[styles.checkinNone, { color: theme.textTertiary }]}>Awaiting check-out</Text>
+                      </View>
+                      <Pressable
+                        onPress={() => markCheckout(checkin.id)}
+                        disabled={isCheckingOut}
+                        style={[styles.checkinBtn, { borderColor: "#f59e0b40", backgroundColor: "#f59e0b15" }]}
+                      >
+                        {isCheckingOut
+                          ? <ActivityIndicator size="small" color="#f59e0b" />
+                          : <><Feather name="log-out" size={12} color="#f59e0b" /><Text style={[styles.checkinBtnText, { color: "#f59e0b" }]}> Check Out</Text></>}
+                      </Pressable>
+                    </>
                   )}
                 </View>
 
+                {/* Inventory */}
                 <View style={[styles.invRow, { borderTopColor: theme.border }]}>
                   <Text style={[styles.invLabel, { color: theme.textTertiary }]}>Inventory:</Text>
                   {(["mattress", "bedsheet", "pillow"] as const).map(field => (
@@ -888,7 +999,7 @@ const styles = StyleSheet.create({
   checkinIcon: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   checkinTime: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   checkinNone: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  checkinBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  checkinBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   checkinBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
   invRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: 1, flexWrap: "wrap" },
   invLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
@@ -907,6 +1018,12 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   reportBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
   reportBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  // Search bar
+  searchBarWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
+  searchBarInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", paddingVertical: 4 },
+  // Proof banner
+  proofBanner: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1 },
+  proofTag: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
   emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   emptySubtext: { fontSize: 12, fontFamily: "Inter_400Regular" },
