@@ -570,15 +570,34 @@ function RoomAttendanceView({ theme }: { theme: any }) {
 
             return (
               <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: isEntered ? "#22c55e40" : theme.border }]}>
-                {/* Student info + attendance toggle */}
+                {/* Student info + attendance status badge */}
                 <View style={styles.attTopRow}>
-                  <View style={[styles.avatar, { backgroundColor: theme.tint + "20" }]}>
-                    <Text style={[styles.avatarText, { color: theme.tint }]}>
+                  <View style={[styles.avatar, { backgroundColor: isEntered ? "#22c55e20" : theme.tint + "20" }]}>
+                    <Text style={[styles.avatarText, { color: isEntered ? "#22c55e" : theme.tint }]}>
                       {(item.name || "?").charAt(0).toUpperCase()}
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                      <Pressable
+                        onPress={() => toggleAttendance(item.id, item.attendance?.status || "not_entered")}
+                        disabled={isUpdating}
+                        style={[styles.statusPill, {
+                          backgroundColor: isEntered ? "#22c55e18" : "#f59e0b18",
+                          borderColor: isEntered ? "#22c55e50" : "#f59e0b50",
+                        }]}
+                      >
+                        {isUpdating
+                          ? <ActivityIndicator size="small" color={isEntered ? "#22c55e" : "#f59e0b"} style={{ width: 28 }} />
+                          : <>
+                              <View style={[styles.statusDot, { backgroundColor: isEntered ? "#22c55e" : "#f59e0b" }]} />
+                              <Text style={[styles.statusPillText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>
+                                {isEntered ? "In" : "Out"}
+                              </Text>
+                            </>}
+                      </Pressable>
+                    </View>
                     <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                       {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
                     </Text>
@@ -588,15 +607,6 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                       </Text>
                     ) : null}
                   </View>
-                  <Pressable
-                    onPress={() => toggleAttendance(item.id, item.attendance?.status || "not_entered")}
-                    disabled={isUpdating}
-                    style={[styles.attToggle, { backgroundColor: isEntered ? "#22c55e" : theme.surface, borderColor: isEntered ? "#22c55e" : theme.border }]}
-                  >
-                    {isUpdating
-                      ? <ActivityIndicator size="small" color={isEntered ? "#fff" : theme.tint} />
-                      : <Feather name={isEntered ? "check" : "circle"} size={18} color={isEntered ? "#fff" : theme.textSecondary} />}
-                  </Pressable>
                 </View>
 
                 {/* Check-in / Check-out section */}
@@ -995,6 +1005,9 @@ const styles = StyleSheet.create({
   studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   studentMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
   attToggle: { width: 40, height: 40, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusPillText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   checkinRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: 1 },
   checkinIcon: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   checkinTime: { fontSize: 12, fontFamily: "Inter_600SemiBold" },

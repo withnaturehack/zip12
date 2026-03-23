@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from "react";
 import {
   View, Text, FlatList, StyleSheet, Modal, ScrollView,
-  Pressable, RefreshControl, Platform, useColorScheme, ActivityIndicator,
+  Pressable, RefreshControl, Platform, useColorScheme, ActivityIndicator, TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth, useApiRequest } from "@/context/AuthContext";
@@ -372,13 +371,23 @@ export default function HostelTab() {
             </View>
           )}
         </View>
-        <Pressable
-          onPress={() => { Haptics.selectionAsync(); router.push("/admin/search"); }}
-          style={[styles.searchBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
-        >
+        <View style={[styles.searchBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Feather name="search" size={16} color={theme.textSecondary} />
-          <Text style={[styles.searchPlaceholder, { color: theme.textSecondary }]}>Search by name, roll…</Text>
-        </Pressable>
+          <TextInput
+            placeholder="Search by name, room, roll…"
+            placeholderTextColor={theme.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            style={[styles.searchInput, { color: theme.text }]}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+              <Feather name="x-circle" size={16} color={theme.textSecondary} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <FlatList
@@ -437,7 +446,7 @@ const styles = StyleSheet.create({
   countBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
   countText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   searchBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10 },
-  searchPlaceholder: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
+  searchInput: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1, paddingVertical: 0 },
   // Student view
   hostelCard: { marginBottom: 16 },
   hostelName: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 4 },
