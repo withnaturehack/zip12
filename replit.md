@@ -64,10 +64,12 @@ workspace/
 - `GET /api/search?q=...&limit=&offset=` — global paginated search
 
 ### Attendance (merged with inventory)
-- `GET /api/attendance?hostelId=` — returns students with attendance + inventory data
+- `GET /api/attendance?hostelId=` — returns students with attendance + inventory data (includes messCard, inventoryLocked, lockedAt)
 - `POST /api/attendance/:studentId` — mark attendance (entered/not_entered)
 - `GET /api/attendance/stats` — today's counts
-- `PATCH /api/attendance/inventory/:studentId` — update mattress/bedsheet/pillow
+- `PATCH /api/attendance/inventory/:studentId` — update mattress/bedsheet/pillow (blocked if inventoryLocked=true)
+- `POST /api/attendance/inventory/:studentId/submit` — permanently lock inventory (cannot be undone)
+- `PATCH /api/attendance/mess-card/:studentId` — toggle messCard boolean for a student
 
 ### Staff Active/Inactive Status
 - `POST /api/staff/go-active` — mark self active (body: { remark })
@@ -136,15 +138,16 @@ workspace/
 
 ## Key Features Built
 
-1. **Merged Attendance + Inventory** — Student cards show name/email/contact + mattress/bedsheet/pillow checkboxes + attendance toggle
-2. **Staff Active/Inactive** — Button to go active/inactive with remark; auto-inactive after 10 minutes; heartbeat every 5 min
-3. **Activity Logs** — Real-time (20s polling) with filter by type, search by name/remark; PDF/CSV export
-4. **Student Profile from Search** — Click any search result to open full profile modal
-5. **Lost & Found for All** — Any authenticated user (student/staff) can report lost items with location
-6. **CSV Import** — SuperAdmin can bulk-import students, mess allocation, hostel assignments; download templates
-7. **PDF Export** — Server-side pdfkit PDFs for students, attendance, activity logs, full report
-8. **Logout fix** — Web uses `window.confirm`, native uses `Alert.alert`
-9. **Trust proxy** — Fixed rate-limiter X-Forwarded-For warning
+1. **Room Attendance Card Flow** — Sequential card: (1) Campus In/Out status pill toggle, (2) Check In button → purple timestamp, (3) Inventory checkboxes (Mattress/Bedsheet/Pillow), (4) Check Out button → orange timestamp, (5) Submit button → permanently locks inventory for that student. Once locked, no one can edit inventory (enforced server-side + client-side).
+2. **Mess Card Tab** — Replaced meal-by-meal B/L/D table with a simple per-student "Card Given / Not Given" toggle backed by `messCard` boolean in `student_inventory` table.
+3. **Inventory Locking** — `inventoryLocked` flag in DB; PATCH inventory API returns 403 if locked; POST submit endpoint locks and sets `lockedAt`/`lockedBy`.
+4. **Search bars** — Inline search (name/room/roll) on both Room and Mess tabs.
+5. **Staff Active/Inactive** — Button to go active/inactive with remark; auto-inactive after 10 minutes; heartbeat every 5 min.
+6. **Activity Logs** — Real-time (20s polling) with filter by type, search by name/remark; PDF/CSV export.
+7. **Student Profile from Search** — Click any search result to open full profile modal.
+8. **Lost & Found for All** — Any authenticated user (student/staff) can report lost items with location.
+9. **CSV Import** — SuperAdmin can bulk-import students, mess allocation, hostel assignments; download templates.
+10. **PDF Export** — Server-side pdfkit PDFs for students, attendance, activity logs, full report.
 
 ## Environment Variables
 
@@ -159,7 +162,7 @@ Key tables:
 - `users` — id, name, email, role, rollNumber, hostelId, roomNumber, assignedMess, isActive, lastActiveAt
 - `hostels` — id, name, description, capacity
 - `attendance` — id, studentId, volunteerId, hostelId, date, status, mess, roomNumber
-- `student_inventory` — id, studentId, hostelId, mattress, bedsheet, pillow
+- `student_inventory` — id, studentId, hostelId, mattress, bedsheet, pillow, messCard, inventoryLocked, lockedBy, lockedAt
 - `time_logs` — id, userId, hostelId, type, note, createdAt
 - `lost_items` — id, title, description, imageUrl, location, status, reportedBy
 - `announcements` — id, title, content, priority, hostelId

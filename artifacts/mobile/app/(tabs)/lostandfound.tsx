@@ -18,23 +18,10 @@ function formatTime(ts: string | null | undefined): string {
   return new Date(ts).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" });
 }
 
-const MEALS = ["breakfast", "lunch", "dinner"] as const;
-type Meal = typeof MEALS[number];
-const MEAL_SHORT: Record<Meal, string> = { breakfast: "B", lunch: "L", dinner: "D" };
-const MEAL_COLOR: Record<Meal, string> = { breakfast: "#f59e0b", lunch: "#22c55e", dinner: "#6366f1" };
-
 // ─── FAB Menu ──────────────────────────────────────────────────────────────────
 
-function FloatingMenu({
-  theme,
-  onNewLostItem,
-  onNewNotification,
-  canNotify = false,
-}: {
-  theme: any;
-  onNewLostItem: () => void;
-  onNewNotification: () => void;
-  canNotify?: boolean;
+function FloatingMenu({ theme, onNewLostItem, onNewNotification, canNotify = false }: {
+  theme: any; onNewLostItem: () => void; onNewNotification: () => void; canNotify?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rotation = useRef(new Animated.Value(0)).current;
@@ -58,11 +45,8 @@ function FloatingMenu({
       {open && (
         <View style={styles.fabMenu}>
           {menuItems.map(item => (
-            <Pressable
-              key={item.label}
-              onPress={() => { setOpen(false); rotation.setValue(0); item.action(); }}
-              style={[styles.fabMenuItem, { backgroundColor: theme.surface, borderColor: item.color + "50" }]}
-            >
+            <Pressable key={item.label} onPress={() => { setOpen(false); rotation.setValue(0); item.action(); }}
+              style={[styles.fabMenuItem, { backgroundColor: theme.surface, borderColor: item.color + "50" }]}>
               <View style={[styles.fabMenuIcon, { backgroundColor: item.color + "20" }]}>
                 <Feather name={item.icon as any} size={16} color={item.color} />
               </View>
@@ -80,23 +64,6 @@ function FloatingMenu({
   );
 }
 
-// ─── Inventory Check ───────────────────────────────────────────────────────────
-
-function InventoryCheck({ label, checked, onToggle, disabled }: {
-  label: string; checked: boolean; onToggle: () => void; disabled: boolean;
-}) {
-  const colorScheme = useColorScheme();
-  const theme = (colorScheme === "dark" ? Colors.dark : Colors.light);
-  return (
-    <Pressable onPress={onToggle} disabled={disabled} style={styles.checkItem}>
-      <View style={[styles.checkbox, checked && styles.checkboxChecked, { borderColor: checked ? "#22c55e" : theme.border }]}>
-        {checked && <Feather name="check" size={11} color="#fff" />}
-      </View>
-      <Text style={[styles.checkLabel, { color: theme.textSecondary }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 // ─── Notification Modal ────────────────────────────────────────────────────────
 
 function NotificationModal({ visible, onClose, theme, request, qc }: {
@@ -106,23 +73,17 @@ function NotificationModal({ visible, onClose, theme, request, qc }: {
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const reset = () => { setTitle(""); setBody(""); };
-  const close = () => { reset(); onClose(); };
+  const close = () => { setTitle(""); setBody(""); onClose(); };
 
   const submit = async () => {
     if (!title.trim()) return;
     setSubmitting(true);
     try {
-      await request("/announcements", {
-        method: "POST",
-        body: JSON.stringify({ title, content: body || title }),
-      });
+      await request("/announcements", { method: "POST", body: JSON.stringify({ title, content: body || title }) });
       qc.invalidateQueries({ queryKey: ["announcements"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       close();
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to send notification");
-    }
+    } catch (e: any) { Alert.alert("Error", e.message || "Failed"); }
     setSubmitting(false);
   };
 
@@ -133,22 +94,12 @@ function NotificationModal({ visible, onClose, theme, request, qc }: {
           <View style={styles.modalHandle} />
           <Text style={[styles.modalTitle, { color: theme.text }]}>Send Notification</Text>
           <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>Broadcasts to your hostel students</Text>
-          <TextInput
-            placeholder="Notification title *"
-            placeholderTextColor={theme.textTertiary}
+          <TextInput placeholder="Notification title *" placeholderTextColor={theme.textTertiary}
             style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={title}
-            onChangeText={setTitle}
-          />
-          <TextInput
-            placeholder="Message body (optional)"
-            placeholderTextColor={theme.textTertiary}
+            value={title} onChangeText={setTitle} />
+          <TextInput placeholder="Message body (optional)" placeholderTextColor={theme.textTertiary}
             style={[styles.input, styles.textArea, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={body}
-            onChangeText={setBody}
-            multiline
-            numberOfLines={3}
-          />
+            value={body} onChangeText={setBody} multiline numberOfLines={3} />
           <View style={styles.modalActions}>
             <Pressable onPress={close} style={[styles.cancelBtn, { borderColor: theme.border }]}>
               <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
@@ -163,7 +114,7 @@ function NotificationModal({ visible, onClose, theme, request, qc }: {
   );
 }
 
-// ─── Shared Lost Item Form Modal ───────────────────────────────────────────────
+// ─── Lost Item Form Modal ──────────────────────────────────────────────────────
 
 function LostFoundFormModal({ visible, onClose, theme, request, qc }: {
   visible: boolean; onClose: () => void; theme: any; request: any; qc: any;
@@ -173,17 +124,13 @@ function LostFoundFormModal({ visible, onClose, theme, request, qc }: {
   const [formLocation, setFormLocation] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const reset = () => { setFormTitle(""); setFormDesc(""); setFormLocation(""); };
-  const close = () => { reset(); onClose(); };
+  const close = () => { setFormTitle(""); setFormDesc(""); setFormLocation(""); onClose(); };
 
   const submit = async () => {
     if (!formTitle.trim()) return;
     setSubmitting(true);
     try {
-      await request("/lostitems", {
-        method: "POST",
-        body: JSON.stringify({ title: formTitle, description: formDesc, location: formLocation }),
-      });
+      await request("/lostitems", { method: "POST", body: JSON.stringify({ title: formTitle, description: formDesc, location: formLocation }) });
       qc.invalidateQueries({ queryKey: ["lostitems"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       close();
@@ -197,32 +144,16 @@ function LostFoundFormModal({ visible, onClose, theme, request, qc }: {
         <Pressable style={[styles.modalSheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
           <View style={styles.modalHandle} />
           <Text style={[styles.modalTitle, { color: theme.text }]}>Report Lost Item</Text>
-          <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-            Help others find it — the more detail, the better
-          </Text>
-          <TextInput
-            placeholder="Item name *"
-            placeholderTextColor={theme.textTertiary}
+          <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>Help others find it</Text>
+          <TextInput placeholder="Item name *" placeholderTextColor={theme.textTertiary}
             style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={formTitle}
-            onChangeText={setFormTitle}
-          />
-          <TextInput
-            placeholder="Description — what does it look like?"
-            placeholderTextColor={theme.textTertiary}
+            value={formTitle} onChangeText={setFormTitle} />
+          <TextInput placeholder="Description" placeholderTextColor={theme.textTertiary}
             style={[styles.input, styles.textArea, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={formDesc}
-            onChangeText={setFormDesc}
-            multiline
-            numberOfLines={3}
-          />
-          <TextInput
-            placeholder="Where was it last seen? (e.g. Mess, Library)"
-            placeholderTextColor={theme.textTertiary}
+            value={formDesc} onChangeText={setFormDesc} multiline numberOfLines={3} />
+          <TextInput placeholder="Last seen location (e.g. Mess, Library)" placeholderTextColor={theme.textTertiary}
             style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={formLocation}
-            onChangeText={setFormLocation}
-          />
+            value={formLocation} onChangeText={setFormLocation} />
           <View style={styles.modalActions}>
             <Pressable onPress={close} style={[styles.cancelBtn, { borderColor: theme.border }]}>
               <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
@@ -237,184 +168,6 @@ function LostFoundFormModal({ visible, onClose, theme, request, qc }: {
   );
 }
 
-// ─── MESS ATTENDANCE TABLE ────────────────────────────────────────────────────
-
-function MessAttendanceView({ theme }: { theme: any }) {
-  const request = useApiRequest();
-  const qc = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const today = new Date().toISOString().split("T")[0];
-
-  const { data: students = [], isLoading: studLoading, refetch: refetchStudents } = useQuery<any[]>({
-    queryKey: ["attendance", today],
-    queryFn: () => request("/attendance"),
-    staleTime: 30000,
-  });
-
-  const { data: messRaw = [], isLoading: messLoading, refetch: refetchMess } = useQuery<any[]>({
-    queryKey: ["mess-attendance", today],
-    queryFn: () => request("/mess-attendance"),
-    refetchInterval: 15000,
-    staleTime: 5000,
-  });
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([refetchStudents(), refetchMess()]);
-    setRefreshing(false);
-  }, [refetchStudents, refetchMess]);
-
-  // Build map: studentId -> { breakfast, lunch, dinner }
-  const messMap: Record<string, Partial<Record<Meal, boolean>>> = {};
-  (messRaw as any[]).forEach(r => {
-    if (!messMap[r.studentId]) messMap[r.studentId] = {};
-    messMap[r.studentId][r.meal as Meal] = r.present === true;
-  });
-
-  const sq = search.trim().toLowerCase();
-  const filteredStudents = sq
-    ? (students as any[]).filter(s =>
-        s.name?.toLowerCase().includes(sq) ||
-        s.roomNumber?.toLowerCase().includes(sq) ||
-        s.rollNumber?.toLowerCase().includes(sq) ||
-        s.email?.toLowerCase().includes(sq)
-      )
-    : (students as any[]);
-
-  const markedBreakfast = Object.values(messMap).filter(m => m.breakfast).length;
-  const markedLunch = Object.values(messMap).filter(m => m.lunch).length;
-  const markedDinner = Object.values(messMap).filter(m => m.dinner).length;
-
-  const toggleMeal = async (studentId: string, meal: Meal, current: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTogglingId(`${studentId}-${meal}`);
-    try {
-      await request(`/mess-attendance/${studentId}`, {
-        method: "POST",
-        body: JSON.stringify({ meal, present: (!current).toString() }),
-      });
-      qc.invalidateQueries({ queryKey: ["mess-attendance"] });
-      qc.invalidateQueries({ queryKey: ["mess-stats"] });
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to update");
-    }
-    setTogglingId(null);
-  };
-
-  const isLoading = studLoading || messLoading;
-
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Meal summary pills */}
-      <View style={[styles.messStatsRow, { borderBottomColor: theme.border }]}>
-        {MEALS.map(meal => (
-          <View key={meal} style={[styles.mealStatPill, { backgroundColor: MEAL_COLOR[meal] + "15", borderColor: MEAL_COLOR[meal] + "40" }]}>
-            <Text style={[styles.mealStatNum, { color: MEAL_COLOR[meal] }]}>
-              {meal === "breakfast" ? markedBreakfast : meal === "lunch" ? markedLunch : markedDinner}
-            </Text>
-            <Text style={[styles.mealStatLabel, { color: theme.textSecondary }]}>
-              {meal.charAt(0).toUpperCase() + meal.slice(1)}
-            </Text>
-          </View>
-        ))}
-        <View style={[styles.mealStatPill, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40", flex: 1.3 }]}>
-          <Text style={[styles.mealStatNum, { color: theme.tint }]}>{students.length}</Text>
-          <Text style={[styles.mealStatLabel, { color: theme.textSecondary }]}>Students</Text>
-        </View>
-      </View>
-
-      {/* Search bar */}
-      <View style={[styles.searchBarWrap, { borderBottomColor: theme.border }]}>
-        <Feather name="search" size={15} color={theme.textSecondary} />
-        <TextInput
-          placeholder="Search by name, room, roll…"
-          placeholderTextColor={theme.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-          style={[styles.searchBarInput, { color: theme.text }]}
-          clearButtonMode="while-editing"
-        />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")}>
-            <Feather name="x-circle" size={15} color={theme.textSecondary} />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Table header */}
-      <View style={[styles.messTableHead, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <Text style={[styles.messThName, { color: theme.textSecondary }]}>STUDENT</Text>
-        {MEALS.map(meal => (
-          <View key={meal} style={styles.messThMeal}>
-            <View style={[styles.mealBadge, { backgroundColor: MEAL_COLOR[meal] + "20" }]}>
-              <Text style={[styles.mealBadgeText, { color: MEAL_COLOR[meal] }]}>{MEAL_SHORT[meal]}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {isLoading ? (
-        <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
-      ) : (
-        <FlatList
-          data={filteredStudents}
-          keyExtractor={item => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border }} />}
-          ListEmptyComponent={() => (
-            <View style={styles.emptyState}>
-              <Feather name="coffee" size={40} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                {search ? "No students match your search" : "No students assigned"}
-              </Text>
-            </View>
-          )}
-          renderItem={({ item }) => {
-            const meals = messMap[item.id] || {};
-            const anyMarked = MEALS.some(m => meals[m]);
-            return (
-              <View style={[styles.messRow, { backgroundColor: anyMarked ? theme.tint + "06" : theme.background }]}>
-                <View style={styles.messStudentCol}>
-                  <Text style={[styles.messStudentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-                  <Text style={[styles.messStudentRoom, { color: theme.textSecondary }]} numberOfLines={1}>
-                    {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
-                  </Text>
-                </View>
-                {MEALS.map(meal => {
-                  const isPresent = !!meals[meal];
-                  const isToggling = togglingId === `${item.id}-${meal}`;
-                  return (
-                    <Pressable
-                      key={meal}
-                      onPress={() => toggleMeal(item.id, meal, isPresent)}
-                      disabled={isToggling}
-                      style={styles.messMealCell}
-                    >
-                      {isToggling ? (
-                        <ActivityIndicator size="small" color={MEAL_COLOR[meal]} />
-                      ) : (
-                        <View style={[styles.mealToggle, {
-                          backgroundColor: isPresent ? MEAL_COLOR[meal] : "transparent",
-                          borderColor: isPresent ? MEAL_COLOR[meal] : theme.border,
-                        }]}>
-                          {isPresent && <Feather name="check" size={13} color="#fff" />}
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            );
-          }}
-        />
-      )}
-    </View>
-  );
-}
-
 // ─── ROOM ATTENDANCE VIEW ──────────────────────────────────────────────────────
 
 function RoomAttendanceView({ theme }: { theme: any }) {
@@ -425,6 +178,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   const [updatingInv, setUpdatingInv] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [checkingOutId, setCheckingOutId] = useState<string | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const today = new Date().toISOString().split("T")[0];
 
@@ -448,7 +202,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   const markMutation = useMutation({
     mutationFn: ({ studentId, status }: { studentId: string; status: string }) =>
       request(`/attendance/${studentId}`, { method: "POST", body: JSON.stringify({ status }) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance"] }); qc.invalidateQueries({ queryKey: ["att-stats"] }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance"] }); },
   });
 
   const invMutation = useMutation({
@@ -481,9 +235,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
       await request(`/checkins/${studentId}`, { method: "POST" });
       qc.invalidateQueries({ queryKey: ["checkins-today"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to mark check-in");
-    }
+    } catch (e: any) { Alert.alert("Error", e.message || "Failed to check in"); }
     setCheckingInId(null);
   }, [request, qc]);
 
@@ -494,10 +246,19 @@ function RoomAttendanceView({ theme }: { theme: any }) {
       await request(`/checkins/${checkinId}/checkout`, { method: "PATCH" });
       qc.invalidateQueries({ queryKey: ["checkins-today"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to mark check-out");
-    }
+    } catch (e: any) { Alert.alert("Error", e.message || "Failed to check out"); }
     setCheckingOutId(null);
+  }, [request, qc]);
+
+  const submitInventory = useCallback(async (studentId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setSubmittingId(studentId);
+    try {
+      await request(`/attendance/inventory/${studentId}/submit`, { method: "POST" });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { Alert.alert("Error", e.message || "Failed to submit"); }
+    setSubmittingId(null);
   }, [request, qc]);
 
   const sq = search.trim().toLowerCase();
@@ -506,8 +267,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
         s.name?.toLowerCase().includes(sq) ||
         s.roomNumber?.toLowerCase().includes(sq) ||
         s.rollNumber?.toLowerCase().includes(sq) ||
-        s.email?.toLowerCase().includes(sq)
-      )
+        s.email?.toLowerCase().includes(sq))
     : (data as any[]);
 
   const entered = data.filter((s: any) => s.attendance?.status === "entered").length;
@@ -519,7 +279,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
       {/* Stats strip */}
       <View style={[styles.statsStripRow, { borderBottomColor: theme.border }]}>
         <StatPill label="Total" value={total} color={theme.text} theme={theme} />
-        <StatPill label="Entered" value={entered} color="#22c55e" theme={theme} />
+        <StatPill label="In Campus" value={entered} color="#22c55e" theme={theme} />
         <StatPill label="Checked In" value={checkedInCount} color="#8b5cf6" theme={theme} />
         <StatPill label="Pending" value={total - entered} color="#f59e0b" theme={theme} />
       </View>
@@ -550,7 +310,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
           keyExtractor={item => item.id}
           contentContainerStyle={{ padding: 10, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           ListEmptyComponent={() => (
             <View style={styles.emptyState}>
               <Feather name="users" size={48} color={theme.textTertiary} />
@@ -563,14 +323,16 @@ function RoomAttendanceView({ theme }: { theme: any }) {
             const isEntered = item.attendance?.status === "entered";
             const isUpdating = updatingId === item.id;
             const isCheckingIn = checkingInId === item.id;
-            const isCheckingOut = checkingOutId === checkinMap[item.id]?.id;
-            const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false };
             const checkin = checkinMap[item.id];
-            const hasCheckout = !!checkin?.checkOutTime;
+            const isCheckingOut = checkingOutId === checkin?.id;
+            const isSubmitting = submittingId === item.id;
+            const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false, inventoryLocked: false };
+            const locked = !!inv.inventoryLocked;
 
             return (
-              <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: isEntered ? "#22c55e40" : theme.border }]}>
-                {/* Student info + attendance status badge */}
+              <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: locked ? "#22c55e50" : isEntered ? "#6366f130" : theme.border }]}>
+
+                {/* ── Row 1: Student identity + campus status ── */}
                 <View style={styles.attTopRow}>
                   <View style={[styles.avatar, { backgroundColor: isEntered ? "#22c55e20" : theme.tint + "20" }]}>
                     <Text style={[styles.avatarText, { color: isEntered ? "#22c55e" : theme.tint }]}>
@@ -578,25 +340,21 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-                      <Pressable
-                        onPress={() => toggleAttendance(item.id, item.attendance?.status || "not_entered")}
-                        disabled={isUpdating}
-                        style={[styles.statusPill, {
-                          backgroundColor: isEntered ? "#22c55e18" : "#f59e0b18",
-                          borderColor: isEntered ? "#22c55e50" : "#f59e0b50",
-                        }]}
-                      >
+                      <Pressable onPress={() => toggleAttendance(item.id, item.attendance?.status || "not_entered")} disabled={isUpdating}
+                        style={[styles.statusPill, { backgroundColor: isEntered ? "#22c55e18" : "#f59e0b18", borderColor: isEntered ? "#22c55e50" : "#f59e0b50" }]}>
                         {isUpdating
                           ? <ActivityIndicator size="small" color={isEntered ? "#22c55e" : "#f59e0b"} style={{ width: 28 }} />
-                          : <>
-                              <View style={[styles.statusDot, { backgroundColor: isEntered ? "#22c55e" : "#f59e0b" }]} />
-                              <Text style={[styles.statusPillText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>
-                                {isEntered ? "In" : "Out"}
-                              </Text>
-                            </>}
+                          : <><View style={[styles.statusDot, { backgroundColor: isEntered ? "#22c55e" : "#f59e0b" }]} />
+                            <Text style={[styles.statusPillText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>{isEntered ? "In" : "Out"}</Text></>}
                       </Pressable>
+                      {locked && (
+                        <View style={[styles.statusPill, { backgroundColor: "#22c55e15", borderColor: "#22c55e40" }]}>
+                          <Feather name="lock" size={10} color="#22c55e" />
+                          <Text style={[styles.statusPillText, { color: "#22c55e" }]}>Submitted</Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                       {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
@@ -609,75 +367,104 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                   </View>
                 </View>
 
-                {/* Check-in / Check-out section */}
-                <View style={[styles.checkinRow, { borderTopColor: theme.border }]}>
-                  {!checkin ? (
-                    /* No check-in yet → show Check In button */
-                    <>
-                      <Feather name="log-in" size={13} color={theme.textTertiary} />
-                      <Text style={[styles.checkinNone, { color: theme.textTertiary, flex: 1 }]}>Not checked in today</Text>
-                      <Pressable
-                        onPress={() => markCheckin(item.id)}
-                        disabled={isCheckingIn}
-                        style={[styles.checkinBtn, { borderColor: "#8b5cf640", backgroundColor: "#8b5cf615" }]}
-                      >
-                        {isCheckingIn
-                          ? <ActivityIndicator size="small" color="#8b5cf6" />
-                          : <><Feather name="log-in" size={12} color="#8b5cf6" /><Text style={[styles.checkinBtnText, { color: "#8b5cf6" }]}> Check In</Text></>}
-                      </Pressable>
-                    </>
-                  ) : hasCheckout ? (
-                    /* Both check-in and check-out done → show proof */
-                    <View style={[styles.proofBanner, { backgroundColor: "#22c55e12", borderColor: "#22c55e30" }]}>
-                      <Feather name="check-circle" size={14} color="#22c55e" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.checkinTime, { color: "#22c55e" }]}>
-                          In: {formatTime(checkin.checkInTime)}
-                        </Text>
-                        <Text style={[styles.checkinTime, { color: "#22c55e" }]}>
-                          Out: {formatTime(checkin.checkOutTime)}
-                        </Text>
-                      </View>
-                      <View style={[styles.proofTag, { backgroundColor: "#22c55e20" }]}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#22c55e" }}>PROOF</Text>
-                      </View>
+                {/* ── Row 2: Check In ── */}
+                <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
+                  <View style={[styles.actionIcon, { backgroundColor: checkin ? "#8b5cf620" : theme.background }]}>
+                    <Feather name="log-in" size={14} color={checkin ? "#8b5cf6" : theme.textTertiary} />
+                  </View>
+                  {checkin ? (
+                    <View style={styles.timeStampBadge}>
+                      <Text style={[styles.timeStampLabel, { color: theme.textTertiary }]}>Check-in</Text>
+                      <Text style={[styles.timeStampValue, { color: "#8b5cf6" }]}>{formatTime(checkin.checkInTime)}</Text>
                     </View>
                   ) : (
-                    /* Checked in but not out → show time + Check Out button */
                     <>
-                      <View style={[styles.checkinIcon, { backgroundColor: "#8b5cf620" }]}>
-                        <Feather name="log-in" size={13} color="#8b5cf6" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.checkinTime, { color: "#8b5cf6" }]}>In: {formatTime(checkin.checkInTime)}</Text>
-                        <Text style={[styles.checkinNone, { color: theme.textTertiary }]}>Awaiting check-out</Text>
-                      </View>
-                      <Pressable
-                        onPress={() => markCheckout(checkin.id)}
-                        disabled={isCheckingOut}
-                        style={[styles.checkinBtn, { borderColor: "#f59e0b40", backgroundColor: "#f59e0b15" }]}
-                      >
-                        {isCheckingOut
-                          ? <ActivityIndicator size="small" color="#f59e0b" />
-                          : <><Feather name="log-out" size={12} color="#f59e0b" /><Text style={[styles.checkinBtnText, { color: "#f59e0b" }]}> Check Out</Text></>}
+                      <Text style={[styles.actionNone, { color: theme.textTertiary, flex: 1 }]}>Not checked in today</Text>
+                      <Pressable onPress={() => markCheckin(item.id)} disabled={isCheckingIn}
+                        style={[styles.actionBtn, { backgroundColor: "#8b5cf6", opacity: isCheckingIn ? 0.6 : 1 }]}>
+                        {isCheckingIn
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <><Feather name="log-in" size={13} color="#fff" /><Text style={styles.actionBtnText}>Check In</Text></>}
                       </Pressable>
                     </>
                   )}
                 </View>
 
-                {/* Inventory */}
-                <View style={[styles.invRow, { borderTopColor: theme.border }]}>
-                  <Text style={[styles.invLabel, { color: theme.textTertiary }]}>Inventory:</Text>
-                  {(["mattress", "bedsheet", "pillow"] as const).map(field => (
-                    <InventoryCheck
-                      key={field}
-                      label={field.charAt(0).toUpperCase() + field.slice(1)}
-                      checked={!!inv[field]}
-                      disabled={updatingInv === `${item.id}-${field}`}
-                      onToggle={() => toggleInventory(item.id, field, !!inv[field])}
-                    />
-                  ))}
+                {/* ── Row 3: Inventory (3 checkboxes) ── */}
+                <View style={[styles.invSection, { borderTopColor: theme.border }]}>
+                  <Text style={[styles.invSectionLabel, { color: theme.textSecondary }]}>
+                    <Feather name={locked ? "lock" : "box"} size={11} /> Inventory
+                  </Text>
+                  <View style={styles.invChipsRow}>
+                    {(["mattress", "bedsheet", "pillow"] as const).map(field => {
+                      const checked = !!inv[field];
+                      const isToggling = updatingInv === `${item.id}-${field}`;
+                      return (
+                        <Pressable key={field} onPress={() => !locked && toggleInventory(item.id, field, checked)}
+                          disabled={locked || isToggling}
+                          style={[styles.invChip, {
+                            backgroundColor: checked ? "#22c55e15" : theme.background,
+                            borderColor: checked ? "#22c55e60" : theme.border,
+                            opacity: locked && !checked ? 0.5 : 1,
+                          }]}>
+                          {isToggling
+                            ? <ActivityIndicator size="small" color="#22c55e" style={{ width: 14 }} />
+                            : <Feather name={checked ? "check-circle" : "circle"} size={14} color={checked ? "#22c55e" : theme.textTertiary} />}
+                          <Text style={[styles.invChipText, { color: checked ? "#22c55e" : theme.textSecondary }]}>
+                            {field.charAt(0).toUpperCase() + field.slice(1)}
+                          </Text>
+                          {locked && checked && <Feather name="lock" size={9} color="#22c55e" />}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </View>
+
+                {/* ── Row 4: Check Out + Submit ── */}
+                <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
+                  {/* Check Out */}
+                  <View style={[styles.actionIcon, { backgroundColor: checkin?.checkOutTime ? "#f59e0b20" : theme.background }]}>
+                    <Feather name="log-out" size={14} color={checkin?.checkOutTime ? "#f59e0b" : theme.textTertiary} />
+                  </View>
+                  {checkin?.checkOutTime ? (
+                    <View style={[styles.timeStampBadge, { flex: 1 }]}>
+                      <Text style={[styles.timeStampLabel, { color: theme.textTertiary }]}>Check-out</Text>
+                      <Text style={[styles.timeStampValue, { color: "#f59e0b" }]}>{formatTime(checkin.checkOutTime)}</Text>
+                    </View>
+                  ) : checkin ? (
+                    <>
+                      <Text style={[styles.actionNone, { color: theme.textTertiary, flex: 1 }]}>Awaiting checkout</Text>
+                      <Pressable onPress={() => markCheckout(checkin.id)} disabled={isCheckingOut}
+                        style={[styles.actionBtn, { backgroundColor: "#f59e0b", opacity: isCheckingOut ? 0.6 : 1 }]}>
+                        {isCheckingOut
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <><Feather name="log-out" size={13} color="#fff" /><Text style={styles.actionBtnText}>Check Out</Text></>}
+                      </Pressable>
+                    </>
+                  ) : (
+                    <Text style={[styles.actionNone, { color: theme.textTertiary, flex: 1 }]}>Check in first</Text>
+                  )}
+
+                  {/* Submit button — only show if not locked */}
+                  {!locked && (
+                    <Pressable onPress={() => {
+                      Alert.alert(
+                        "Submit Inventory",
+                        "This will permanently lock the inventory for this student. It cannot be changed afterwards.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Submit", style: "destructive", onPress: () => submitInventory(item.id) },
+                        ]
+                      );
+                    }} disabled={isSubmitting}
+                      style={[styles.submitInventoryBtn, { opacity: isSubmitting ? 0.6 : 1 }]}>
+                      {isSubmitting
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <><Feather name="check-square" size={13} color="#fff" /><Text style={styles.actionBtnText}>Submit</Text></>}
+                    </Pressable>
+                  )}
+                </View>
+
               </View>
             );
           }}
@@ -687,7 +474,138 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   );
 }
 
-// ─── LOST ITEMS LIST VIEW (for staff "Items" tab) ─────────────────────────────
+// ─── MESS CARD VIEW ────────────────────────────────────────────────────────────
+
+function MessAttendanceView({ theme }: { theme: any }) {
+  const request = useApiRequest();
+  const qc = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: students = [], isLoading, refetch } = useQuery<any[]>({
+    queryKey: ["attendance", today],
+    queryFn: () => request("/attendance"),
+    refetchInterval: 15000,
+    staleTime: 5000,
+  });
+
+  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
+
+  const toggleMessCard = async (studentId: string, current: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTogglingId(studentId);
+    try {
+      await request(`/attendance/mess-card/${studentId}`, { method: "PATCH", body: JSON.stringify({ messCard: !current }) });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { Alert.alert("Error", e.message || "Failed to update"); }
+    setTogglingId(null);
+  };
+
+  const sq = search.trim().toLowerCase();
+  const filtered = sq
+    ? (students as any[]).filter(s =>
+        s.name?.toLowerCase().includes(sq) ||
+        s.roomNumber?.toLowerCase().includes(sq) ||
+        s.rollNumber?.toLowerCase().includes(sq) ||
+        s.email?.toLowerCase().includes(sq))
+    : (students as any[]);
+
+  const cardGivenCount = (students as any[]).filter(s => !!s.inventory?.messCard).length;
+  const total = students.length;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Summary pills */}
+      <View style={[styles.statsStripRow, { borderBottomColor: theme.border }]}>
+        <StatPill label="Total" value={total} color={theme.text} theme={theme} />
+        <StatPill label="Card Given" value={cardGivenCount} color="#22c55e" theme={theme} />
+        <StatPill label="Pending" value={total - cardGivenCount} color="#f59e0b" theme={theme} />
+      </View>
+
+      {/* Search bar */}
+      <View style={[styles.searchBarWrap, { borderBottomColor: theme.border }]}>
+        <Feather name="search" size={15} color={theme.textSecondary} />
+        <TextInput
+          placeholder="Search by name, room, roll…"
+          placeholderTextColor={theme.textTertiary}
+          value={search}
+          onChangeText={setSearch}
+          style={[styles.searchBarInput, { color: theme.text }]}
+          clearButtonMode="while-editing"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")}>
+            <Feather name="x-circle" size={15} color={theme.textSecondary} />
+          </Pressable>
+        )}
+      </View>
+
+      {isLoading ? (
+        <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
+          contentContainerStyle={{ padding: 10, paddingBottom: 120 }}
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyState}>
+              <Feather name="coffee" size={40} color={theme.textTertiary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                {search ? "No students match your search" : "No students assigned"}
+              </Text>
+            </View>
+          )}
+          renderItem={({ item }) => {
+            const given = !!item.inventory?.messCard;
+            const isToggling = togglingId === item.id;
+
+            return (
+              <View style={[styles.messCardRow, {
+                backgroundColor: given ? "#22c55e08" : theme.surface,
+                borderColor: given ? "#22c55e40" : theme.border,
+              }]}>
+                <View style={[styles.avatar, { backgroundColor: given ? "#22c55e20" : theme.tint + "20" }]}>
+                  <Text style={[styles.avatarText, { color: given ? "#22c55e" : theme.tint }]}>
+                    {(item.name || "?").charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+                    {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => toggleMessCard(item.id, given)}
+                  disabled={isToggling}
+                  style={[styles.messCardBtn, {
+                    backgroundColor: given ? "#22c55e" : theme.background,
+                    borderColor: given ? "#22c55e" : theme.border,
+                  }]}>
+                  {isToggling
+                    ? <ActivityIndicator size="small" color={given ? "#fff" : theme.tint} />
+                    : <>
+                        <Feather name={given ? "check-circle" : "circle"} size={15} color={given ? "#fff" : theme.textSecondary} />
+                        <Text style={[styles.messCardBtnText, { color: given ? "#fff" : theme.textSecondary }]}>
+                          {given ? "Card Given" : "Not Given"}
+                        </Text>
+                      </>}
+                </Pressable>
+              </View>
+            );
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+// ─── LOST ITEMS LIST VIEW ─────────────────────────────────────────────────────
 
 function LostItemsListView({ theme }: { theme: any }) {
   const request = useApiRequest();
@@ -741,33 +659,26 @@ function LostItemsListView({ theme }: { theme: any }) {
   );
 }
 
-// ─── ATTENDANCE + INVENTORY SCREEN ────────────────────────────────────────────
-
-const ATTENDANCE_TABS = ["room", "mess", "items"] as const;
-type AttTab = typeof ATTENDANCE_TABS[number];
+// ─── ATTENDANCE SCREEN (staff/volunteer/admin) ─────────────────────────────────
 
 const TAB_CONFIG = [
   { key: "room",  icon: "home",    label: "Room",  color: "#6366f1" },
   { key: "mess",  icon: "coffee",  label: "Mess",  color: "#22c55e" },
   { key: "items", icon: "package", label: "Lost",  color: "#f59e0b" },
 ] as const;
+type AttTab = "room" | "mess" | "items";
 
 function AttendanceScreen({ theme, topPad }: { theme: any; topPad: number }) {
   const request = useApiRequest();
   const qc = useQueryClient();
-  const { user } = useAuth();
   const [showLostModal, setShowLostModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [activeTab, setActiveTab] = useState<AttTab>("room");
-  const today = new Date().toISOString().split("T")[0];
 
-  const canNotify = true;
-
-  const pageTitles: Record<AttTab, string> = { room: "Attendance", mess: "Mess Attendance", items: "Lost & Found" };
+  const pageTitles: Record<AttTab, string> = { room: "Room Attendance", mess: "Mess Cards", items: "Lost & Found" };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
       <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <View style={styles.headerRow}>
           <View>
@@ -778,11 +689,9 @@ function AttendanceScreen({ theme, topPad }: { theme: any; topPad: number }) {
             {TAB_CONFIG.map(tab => {
               const active = activeTab === tab.key;
               return (
-                <Pressable
-                  key={tab.key}
+                <Pressable key={tab.key}
                   onPress={() => { setActiveTab(tab.key as AttTab); Haptics.selectionAsync(); }}
-                  style={[styles.tabBtn, { backgroundColor: active ? tab.color + "20" : theme.surface, borderColor: active ? tab.color : theme.border }]}
-                >
+                  style={[styles.tabBtn, { backgroundColor: active ? tab.color + "20" : theme.surface, borderColor: active ? tab.color : theme.border }]}>
                   <Feather name={tab.icon as any} size={13} color={active ? tab.color : theme.textSecondary} />
                   <Text style={[styles.tabBtnText, { color: active ? tab.color : theme.textSecondary }]}>{tab.label}</Text>
                 </Pressable>
@@ -792,39 +701,18 @@ function AttendanceScreen({ theme, topPad }: { theme: any; topPad: number }) {
         </View>
       </View>
 
-      {activeTab === "room" ? (
-        <RoomAttendanceView theme={theme} />
-      ) : activeTab === "mess" ? (
-        <MessAttendanceView theme={theme} />
-      ) : (
-        <LostItemsListView theme={theme} />
-      )}
+      {activeTab === "room" ? <RoomAttendanceView theme={theme} />
+        : activeTab === "mess" ? <MessAttendanceView theme={theme} />
+        : <LostItemsListView theme={theme} />}
 
-      <NotificationModal
-        visible={showNotifModal}
-        onClose={() => setShowNotifModal(false)}
-        theme={theme}
-        request={request}
-        qc={qc}
-      />
-      <LostFoundFormModal
-        visible={showLostModal}
-        onClose={() => setShowLostModal(false)}
-        theme={theme}
-        request={request}
-        qc={qc}
-      />
-      <FloatingMenu
-        theme={theme}
-        canNotify={canNotify}
-        onNewLostItem={() => setShowLostModal(true)}
-        onNewNotification={() => setShowNotifModal(true)}
-      />
+      <NotificationModal visible={showNotifModal} onClose={() => setShowNotifModal(false)} theme={theme} request={request} qc={qc} />
+      <LostFoundFormModal visible={showLostModal} onClose={() => setShowLostModal(false)} theme={theme} request={request} qc={qc} />
+      <FloatingMenu theme={theme} canNotify={true} onNewLostItem={() => setShowLostModal(true)} onNewNotification={() => setShowNotifModal(true)} />
     </View>
   );
 }
 
-// ─── LOST & FOUND SCREEN (students + staff) ───────────────────────────────────
+// ─── LOST & FOUND SCREEN (students) ───────────────────────────────────────────
 
 function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
   const request = useApiRequest();
@@ -835,7 +723,6 @@ function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
   const [showNotifModal, setShowNotifModal] = useState(false);
 
   const isStaff = user?.role && user.role !== "student";
-  const canNotify = isStaff;
 
   const { data: items = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ["lostitems"],
@@ -845,7 +732,6 @@ function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
   });
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
-
   const statusColor = (s: string) => s === "found" ? "#22c55e" : s === "claimed" ? "#8b5cf6" : "#f59e0b";
   const statusLabel = (s: string) => s === "found" ? "Found" : s === "claimed" ? "Claimed" : "Lost";
 
@@ -855,9 +741,7 @@ function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
         <View style={styles.headerRow}>
           <View>
             <Text style={[styles.pageTitle, { color: theme.text }]}>Lost & Found</Text>
-            <Text style={[styles.pageDate, { color: theme.textSecondary }]}>
-              {items.length} item{items.length !== 1 ? "s" : ""} reported
-            </Text>
+            <Text style={[styles.pageDate, { color: theme.textSecondary }]}>{items.length} item{items.length !== 1 ? "s" : ""} reported</Text>
           </View>
           <Pressable onPress={() => setShowLostModal(true)} style={[styles.reportBtn, { backgroundColor: theme.tint }]}>
             <Feather name="plus" size={16} color="#fff" />
@@ -889,23 +773,11 @@ function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.studentName, { color: theme.text }]}>{item.title}</Text>
-                {item.description ? (
-                  <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text>
-                ) : null}
+                {item.description ? <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text> : null}
                 <View style={styles.metaRow}>
-                  {item.location ? (
-                    <View style={styles.metaChip}>
-                      <Feather name="map-pin" size={10} color={theme.textTertiary} />
-                      <Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.location}</Text>
-                    </View>
-                  ) : null}
-                  <View style={styles.metaChip}>
-                    <Feather name="user" size={10} color={theme.textTertiary} />
-                    <Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.reportedByName}</Text>
-                  </View>
-                  <Text style={[styles.metaChipText, { color: theme.textTertiary }]}>
-                    {new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                  </Text>
+                  {item.location ? <View style={styles.metaChip}><Feather name="map-pin" size={10} color={theme.textTertiary} /><Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.location}</Text></View> : null}
+                  <View style={styles.metaChip}><Feather name="user" size={10} color={theme.textTertiary} /><Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.reportedByName}</Text></View>
+                  <Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>
                 </View>
               </View>
               <View style={[styles.statusBadge, { backgroundColor: statusColor(item.status) + "20" }]}>
@@ -916,41 +788,22 @@ function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
         )}
       />
 
-      <LostFoundFormModal
-        visible={showLostModal}
-        onClose={() => setShowLostModal(false)}
-        theme={theme}
-        request={request}
-        qc={qc}
-      />
-
+      <LostFoundFormModal visible={showLostModal} onClose={() => setShowLostModal(false)} theme={theme} request={request} qc={qc} />
       {isStaff && (
         <>
-          <NotificationModal
-            visible={showNotifModal}
-            onClose={() => setShowNotifModal(false)}
-            theme={theme}
-            request={request}
-            qc={qc}
-          />
-          <FloatingMenu
-            theme={theme}
-            canNotify={canNotify}
-            onNewLostItem={() => setShowLostModal(true)}
-            onNewNotification={() => setShowNotifModal(true)}
-          />
+          <NotificationModal visible={showNotifModal} onClose={() => setShowNotifModal(false)} theme={theme} request={request} qc={qc} />
+          <FloatingMenu theme={theme} canNotify={true} onNewLostItem={() => setShowLostModal(true)} onNewNotification={() => setShowNotifModal(true)} />
         </>
       )}
     </View>
   );
 }
 
-// ─── ROOT: Role-adaptive dispatcher ───────────────────────────────────────────
+// ─── ROOT ──────────────────────────────────────────────────────────────────────
 
 export default function LostFoundTab() {
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
@@ -973,53 +826,59 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   pageHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 4 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  pageTitle: { fontSize: 24, fontFamily: "Inter_700Bold" },
+  pageTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
   pageDate: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  tabBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  tabBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
   tabBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
+  // Stats strip
   statsStripRow: { flexDirection: "row", gap: 6, padding: 10, borderBottomWidth: 1, flexWrap: "wrap" },
   statPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 18, borderWidth: 1 },
   statPillVal: { fontSize: 14, fontFamily: "Inter_700Bold" },
   statPillLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  // Mess attendance table
-  messStatsRow: { flexDirection: "row", gap: 6, padding: 10, borderBottomWidth: 1 },
-  mealStatPill: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, borderWidth: 1, gap: 2 },
-  mealStatNum: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  mealStatLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  messTableHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
-  messThName: { flex: 1, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
-  messThMeal: { width: 52, alignItems: "center" },
-  mealBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  mealBadgeText: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  messRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10 },
-  messStudentCol: { flex: 1, paddingRight: 8 },
-  messStudentName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  messStudentRoom: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  messMealCell: { width: 52, alignItems: "center", justifyContent: "center", height: 44 },
-  mealToggle: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+
+  // Search bar
+  searchBarWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
+  searchBarInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", paddingVertical: 4 },
+
   // Attendance card
   attCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   attTopRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   avatarText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   studentMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  attToggle: { width: 40, height: 40, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
+
+  // Status pill (inline badge next to name)
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusPillText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  checkinRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: 1 },
-  checkinIcon: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  checkinTime: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  checkinNone: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  checkinBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  checkinBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  invRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: 1, flexWrap: "wrap" },
-  invLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  checkItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  checkboxChecked: { backgroundColor: "#22c55e", borderColor: "#22c55e" },
-  checkLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  statusPillText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+
+  // Action rows (check in / check out)
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: 1 },
+  actionIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  actionNone: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
+  actionBtnText: { fontSize: 12, fontFamily: "Inter_700Bold", color: "#fff" },
+  timeStampBadge: { gap: 1 },
+  timeStampLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  timeStampValue: { fontSize: 13, fontFamily: "Inter_700Bold" },
+
+  // Submit inventory button
+  submitInventoryBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: "#22c55e", marginLeft: 4 },
+
+  // Inventory section
+  invSection: { paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, gap: 8 },
+  invSectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 },
+  invChipsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  invChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
+  invChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+
+  // Mess card row
+  messCardRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
+  messCardBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5 },
+  messCardBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+
   // Lost & Found
   lostCard: { flexDirection: "row", gap: 12, alignItems: "flex-start", borderRadius: 14, borderWidth: 1, padding: 14 },
   lostItemRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
@@ -1031,34 +890,32 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   reportBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
   reportBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  // Search bar
-  searchBarWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
-  searchBarInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", paddingVertical: 4 },
-  // Proof banner
-  proofBanner: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1 },
-  proofTag: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+
+  // Empty state
   emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   emptySubtext: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: "#00000080", justifyContent: "flex-end" },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36, gap: 12 },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 8 },
-  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  modalSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 4 },
-  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: "Inter_400Regular" },
-  textArea: { height: 80, textAlignVertical: "top" },
-  modalActions: { flexDirection: "row", gap: 10, marginTop: 8 },
-  cancelBtn: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+
+  // Modals
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "#00000060" },
+  modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
+  modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  modalSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: -6 },
+  input: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: "Inter_400Regular" },
+  textArea: { minHeight: 80, textAlignVertical: "top" },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  cancelBtn: { flex: 1, borderWidth: 1, borderRadius: 10, alignItems: "center", paddingVertical: 12 },
   cancelBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  submitBtn: { flex: 2, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
-  submitBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  submitBtn: { flex: 1, borderRadius: 10, alignItems: "center", paddingVertical: 12 },
+  submitBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+
   // FAB
-  fabContainer: { position: "absolute", right: 20, bottom: 30, alignItems: "flex-end", zIndex: 100 },
-  fab: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
-  fabMenu: { gap: 10, marginBottom: 14, alignItems: "flex-end" },
-  fabMenuItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+  fabContainer: { position: "absolute", bottom: 100, right: 20, alignItems: "flex-end", gap: 10 },
+  fabBackdrop: { position: "absolute", top: -1000, left: -1000, right: -1000, bottom: -1000 },
+  fabMenu: { gap: 8, alignItems: "flex-end" },
+  fabMenuItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
   fabMenuIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  fabMenuLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  fabBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
+  fabMenuLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  fab: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
 });
