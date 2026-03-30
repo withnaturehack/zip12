@@ -38,8 +38,8 @@ export default function HomeScreen() {
     queryKey: ["att-stats"],
     queryFn: () => request("/attendance/stats"),
     enabled: isVolunteer,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: isCoordinator ? 5000 : 20000,
+    staleTime: isCoordinator ? 3000 : 10000,
   });
 
   const { data: hostel } = useQuery({
@@ -53,24 +53,24 @@ export default function HomeScreen() {
     queryKey: ["report-summary"],
     queryFn: () => request("/reports/summary"),
     enabled: isCoordinator,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 10000,
+    staleTime: 5000,
   });
 
   const { data: messStats, refetch: refetchMess } = useQuery<any>({
     queryKey: ["mess-stats"],
     queryFn: () => request("/mess-attendance/stats"),
     enabled: isVolunteer,
-    refetchInterval: 20000,
-    staleTime: 10000,
+    refetchInterval: isCoordinator ? 5000 : 15000,
+    staleTime: isCoordinator ? 3000 : 8000,
   });
 
   const { data: checkinStats } = useQuery<any>({
     queryKey: ["checkin-stats"],
     queryFn: () => request("/checkins/stats"),
     enabled: isCoordinator,
-    refetchInterval: 15000,
-    staleTime: 8000,
+    refetchInterval: 5000,
+    staleTime: 3000,
   });
 
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({

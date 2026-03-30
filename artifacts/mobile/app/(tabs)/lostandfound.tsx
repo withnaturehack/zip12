@@ -93,7 +93,6 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   const [updatingInv, setUpdatingInv] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [checkingOutId, setCheckingOutId] = useState<string | null>(null);
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const today = new Date().toISOString().split("T")[0];
 
@@ -129,17 +128,18 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
 
   const toggleAttendance = useCallback(async (studentId: string, current: string) => {
-    const next = current === "entered" ? "not_entered" : "entered";
+    if (current === "entered") return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setUpdatingId(studentId);
-    try { await markMutation.mutateAsync({ studentId, status: next }); } catch { }
+    try { await markMutation.mutateAsync({ studentId, status: "entered" }); } catch { }
     setUpdatingId(null);
   }, [markMutation]);
 
   const toggleInventory = useCallback(async (studentId: string, field: string, current: boolean) => {
+    if (current) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setUpdatingInv(`${studentId}-${field}`);
-    try { await invMutation.mutateAsync({ studentId, field, val: !current }); } catch { }
+    try { await invMutation.mutateAsync({ studentId, field, val: true }); } catch { }
     setUpdatingInv(null);
   }, [invMutation]);
 
@@ -165,16 +165,6 @@ function RoomAttendanceView({ theme }: { theme: any }) {
     setCheckingOutId(null);
   }, [request, qc]);
 
-  const submitInventory = useCallback(async (studentId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setSubmittingId(studentId);
-    try {
-      await request(`/attendance/inventory/${studentId}/submit`, { method: "POST" });
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { Alert.alert("Error", e.message || "Failed to submit"); }
-    setSubmittingId(null);
-  }, [request, qc]);
 
   const sq = search.trim().toLowerCase();
   const filtered = sq
@@ -240,12 +230,11 @@ function RoomAttendanceView({ theme }: { theme: any }) {
             const isCheckingIn = checkingInId === item.id;
             const checkin = checkinMap[item.id];
             const isCheckingOut = checkingOutId === checkin?.id;
-            const isSubmitting = submittingId === item.id;
-            const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false, inventoryLocked: false };
-            const locked = !!inv.inventoryLocked;
+            const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false };
+            const allGiven = inv.mattress && inv.bedsheet && inv.pillow;
 
             return (
-              <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: locked ? "#22c55e50" : isEntered ? "#6366f130" : theme.border }]}>
+              <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: allGiven ? "#22c55e50" : isEntered ? "#6366f130" : theme.border }]}>
 
                 {/* ── Row 1: Student identity + campus status ── */}
                 <View style={styles.attTopRow}>
@@ -257,19 +246,13 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-                      <Pressable onPress={() => toggleAttendance(item.id, item.attendance?.status || "not_entered")} disabled={isUpdating}
+                      <Pressable onPress={() => !isEntered && toggleAttendance(item.id, item.attendance?.status || "not_entered")} disabled={isUpdating || isEntered}
                         style={[styles.statusPill, { backgroundColor: isEntered ? "#22c55e18" : "#f59e0b18", borderColor: isEntered ? "#22c55e50" : "#f59e0b50" }]}>
                         {isUpdating
                           ? <ActivityIndicator size="small" color={isEntered ? "#22c55e" : "#f59e0b"} style={{ width: 28 }} />
                           : <><View style={[styles.statusDot, { backgroundColor: isEntered ? "#22c55e" : "#f59e0b" }]} />
-                            <Text style={[styles.statusPillText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>{isEntered ? "In" : "Out"}</Text></>}
+                            <Text style={[styles.statusPillText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>{isEntered ? "In ✓" : "Out"}</Text></>}
                       </Pressable>
-                      {locked && (
-                        <View style={[styles.statusPill, { backgroundColor: "#22c55e15", borderColor: "#22c55e40" }]}>
-                          <Feather name="lock" size={10} color="#22c55e" />
-                          <Text style={[styles.statusPillText, { color: "#22c55e" }]}>Submitted</Text>
-                        </View>
-                      )}
                     </View>
                     <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                       {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
@@ -308,19 +291,18 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                 {/* ── Row 3: Inventory (3 checkboxes) ── */}
                 <View style={[styles.invSection, { borderTopColor: theme.border }]}>
                   <Text style={[styles.invSectionLabel, { color: theme.textSecondary }]}>
-                    <Feather name={locked ? "lock" : "box"} size={11} /> Inventory
+                    <Feather name={allGiven ? "lock" : "box"} size={11} /> Inventory
                   </Text>
                   <View style={styles.invChipsRow}>
                     {(["mattress", "bedsheet", "pillow"] as const).map(field => {
                       const checked = !!inv[field];
                       const isToggling = updatingInv === `${item.id}-${field}`;
                       return (
-                        <Pressable key={field} onPress={() => !locked && toggleInventory(item.id, field, checked)}
-                          disabled={locked || isToggling}
+                        <Pressable key={field} onPress={() => !checked && toggleInventory(item.id, field, checked)}
+                          disabled={checked || isToggling}
                           style={[styles.invChip, {
                             backgroundColor: checked ? "#22c55e15" : theme.background,
                             borderColor: checked ? "#22c55e60" : theme.border,
-                            opacity: locked && !checked ? 0.5 : 1,
                           }]}>
                           {isToggling
                             ? <ActivityIndicator size="small" color="#22c55e" style={{ width: 14 }} />
@@ -328,16 +310,15 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                           <Text style={[styles.invChipText, { color: checked ? "#22c55e" : theme.textSecondary }]}>
                             {field.charAt(0).toUpperCase() + field.slice(1)}
                           </Text>
-                          {locked && checked && <Feather name="lock" size={9} color="#22c55e" />}
+                          {checked && <Feather name="lock" size={9} color="#22c55e" />}
                         </Pressable>
                       );
                     })}
                   </View>
                 </View>
 
-                {/* ── Row 4: Check Out + Submit ── */}
+                {/* ── Row 4: Check Out ── */}
                 <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
-                  {/* Check Out */}
                   <View style={[styles.actionIcon, { backgroundColor: checkin?.checkOutTime ? "#f59e0b20" : theme.background }]}>
                     <Feather name="log-out" size={14} color={checkin?.checkOutTime ? "#f59e0b" : theme.textTertiary} />
                   </View>
@@ -358,25 +339,6 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                     </>
                   ) : (
                     <Text style={[styles.actionNone, { color: theme.textTertiary, flex: 1 }]}>Check in first</Text>
-                  )}
-
-                  {/* Submit button — only show if not locked */}
-                  {!locked && (
-                    <Pressable onPress={() => {
-                      Alert.alert(
-                        "Submit Inventory",
-                        "This will permanently lock the inventory for this student. It cannot be changed afterwards.",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          { text: "Submit", style: "destructive", onPress: () => submitInventory(item.id) },
-                        ]
-                      );
-                    }} disabled={isSubmitting}
-                      style={[styles.submitInventoryBtn, { opacity: isSubmitting ? 0.6 : 1 }]}>
-                      {isSubmitting
-                        ? <ActivityIndicator size="small" color="#fff" />
-                        : <><Feather name="check-square" size={13} color="#fff" /><Text style={styles.actionBtnText}>Submit</Text></>}
-                    </Pressable>
                   )}
                 </View>
 
@@ -502,8 +464,8 @@ function MessAttendanceView({ theme }: { theme: any }) {
                   ) : null}
                 </View>
                 <Pressable
-                  onPress={() => toggleMessCard(item.id, given)}
-                  disabled={isToggling}
+                  onPress={() => !given && toggleMessCard(item.id, given)}
+                  disabled={isToggling || given}
                   style={[styles.messCardBtn, {
                     backgroundColor: given ? "#22c55e" : theme.background,
                     borderColor: given ? "#22c55e" : theme.border,
@@ -511,9 +473,9 @@ function MessAttendanceView({ theme }: { theme: any }) {
                   {isToggling
                     ? <ActivityIndicator size="small" color={given ? "#fff" : theme.tint} />
                     : <>
-                        <Feather name={given ? "check-circle" : "circle"} size={15} color={given ? "#fff" : theme.textSecondary} />
+                        <Feather name={given ? "lock" : "circle"} size={15} color={given ? "#fff" : theme.textSecondary} />
                         <Text style={[styles.messCardBtnText, { color: given ? "#fff" : theme.textSecondary }]}>
-                          {given ? "Card Given" : "Not Given"}
+                          {given ? "Card Given" : "Give Card"}
                         </Text>
                       </>}
                 </Pressable>
@@ -636,9 +598,6 @@ const styles = StyleSheet.create({
   timeStampBadge: { gap: 1 },
   timeStampLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
   timeStampValue: { fontSize: 13, fontFamily: "Inter_700Bold" },
-
-  // Submit inventory button
-  submitInventoryBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: "#22c55e", marginLeft: 4 },
 
   // Inventory section
   invSection: { paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, gap: 8 },
