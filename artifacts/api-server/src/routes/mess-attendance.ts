@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, messAttendanceTable, usersTable } from "@workspace/db";
+import { db, messAttendanceTable, usersTable, studentInventoryTable } from "@workspace/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
@@ -99,42 +99,27 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   })));
 });
 
-// GET /api/mess-attendance/stats — today's mess stats for dashboard
+// GET /api/mess-attendance/stats — today's mess card stats for dashboard
 router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
-  const date = todayStr();
-
   const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
 
-  const all = await db.select({
-    id: messAttendanceTable.id,
-    hostelId: messAttendanceTable.hostelId,
-    meal: messAttendanceTable.meal,
-    present: messAttendanceTable.present,
-  }).from(messAttendanceTable).where(eq(messAttendanceTable.date, date));
+  const inventoryRows = await db.select({
+    studentId: studentInventoryTable.studentId,
+    hostelId: studentInventoryTable.hostelId,
+    messCard: studentInventoryTable.messCard,
+  }).from(studentInventoryTable);
 
-  let relevant = all;
+  let relevant = inventoryRows;
   if (!COORDINATOR_ROLES.includes(caller?.role || "")) {
-    relevant = all.filter(r => r.hostelId === caller?.hostelId);
+    relevant = inventoryRows.filter(r => r.hostelId === caller?.hostelId);
   }
 
-  const meals = ["breakfast", "lunch", "dinner", "snacks"];
-  const byMeal = Object.fromEntries(
-    meals.map(m => {
-      const mealRows = relevant.filter(r => r.meal === m);
-      return [m, {
-        total: mealRows.length,
-        present: mealRows.filter(r => r.present === "true").length,
-        absent: mealRows.filter(r => r.present === "false").length,
-      }];
-    })
-  );
+  const cardGivenCount = relevant.filter(r => r.messCard === true).length;
 
   res.json({
-    date,
-    totalMarked: relevant.length,
-    presentCount: relevant.filter(r => r.present === "true").length,
-    byMeal,
+    cardGivenCount,
+    total: relevant.length,
   });
 });
 

@@ -124,29 +124,6 @@ export default function ProfileScreen() {
         </AnimatedCard>
       )}
 
-      {/* STUDENT TOOLS */}
-      {isStudent && (
-        <AnimatedCard style={styles.card}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Quick Links</Text>
-          {[
-            { icon: "home", label: "My Hostel", path: "/(tabs)/hostel" },
-            { icon: "package", label: "Lost & Found", path: "/(tabs)/lostandfound" },
-            { icon: "bell", label: "Notifications", path: "/(tabs)/notifications" },
-          ].map(({ icon, label, path }) => (
-            <Pressable
-              key={label}
-              onPress={() => { Haptics.selectionAsync(); router.push(path as any); }}
-              style={[styles.menuRow, { borderBottomColor: theme.border }]}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: theme.tint + "18" }]}>
-                <Feather name={icon as any} size={17} color={theme.tint} />
-              </View>
-              <Text style={[styles.menuLabel, { color: theme.text }]}>{label}</Text>
-              <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-            </Pressable>
-          ))}
-        </AnimatedCard>
-      )}
 
       {/* Logout */}
       <Pressable

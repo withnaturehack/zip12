@@ -60,9 +60,10 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
       bedsheet: inventoryMap[s.id].bedsheet,
       pillow: inventoryMap[s.id].pillow,
       messCard: inventoryMap[s.id].messCard,
+      messCardGivenAt: inventoryMap[s.id].messCardGivenAt?.toISOString() || null,
       inventoryLocked: inventoryMap[s.id].inventoryLocked,
       lockedAt: inventoryMap[s.id].lockedAt?.toISOString() || null,
-    } : { mattress: false, bedsheet: false, pillow: false, messCard: false, inventoryLocked: false, lockedAt: null },
+    } : { mattress: false, bedsheet: false, pillow: false, messCard: false, messCardGivenAt: null, inventoryLocked: false, lockedAt: null },
     hasInventory: !!inventoryMap[s.id],
   }));
 
@@ -220,13 +221,17 @@ router.patch("/mess-card/:studentId", requireVolunteer, async (req: AuthRequest,
 
   const [existing] = await db.select().from(studentInventoryTable).where(eq(studentInventoryTable.studentId, studentId));
 
+  const newMessCard = messCard !== undefined ? messCard : (existing ? !existing.messCard : true);
+  const givenAt = newMessCard ? new Date() : null;
+
   if (existing) {
     const [updated] = await db.update(studentInventoryTable).set({
-      messCard: messCard !== undefined ? messCard : !existing.messCard,
+      messCard: newMessCard,
+      messCardGivenAt: givenAt,
       updatedBy: req.userId!,
       updatedAt: new Date(),
     }).where(eq(studentInventoryTable.studentId, studentId)).returning();
-    res.json({ ...updated, lockedAt: updated.lockedAt?.toISOString() || null });
+    res.json({ ...updated, lockedAt: updated.lockedAt?.toISOString() || null, messCardGivenAt: updated.messCardGivenAt?.toISOString() || null });
   } else {
     const [record] = await db.insert(studentInventoryTable).values({
       id: generateId(),
@@ -235,11 +240,12 @@ router.patch("/mess-card/:studentId", requireVolunteer, async (req: AuthRequest,
       mattress: false,
       bedsheet: false,
       pillow: false,
-      messCard: messCard !== undefined ? messCard : true,
+      messCard: newMessCard,
+      messCardGivenAt: givenAt,
       inventoryLocked: false,
       updatedBy: req.userId!,
     }).returning();
-    res.json({ ...record, lockedAt: null });
+    res.json({ ...record, lockedAt: null, messCardGivenAt: record.messCardGivenAt?.toISOString() || null });
   }
 });
 

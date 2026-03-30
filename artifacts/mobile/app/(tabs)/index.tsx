@@ -182,66 +182,9 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* STUDENT DASHBOARD */}
-      {isStudent && (
-        <>
-          <AnimatedCard style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconBox, { backgroundColor: theme.tint + "20" }]}>
-                <Feather name="home" size={20} color={theme.tint} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>My Hostel</Text>
-                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{hostel?.name || "Not assigned"}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <InfoChip icon="hash" label="Room" value={user?.roomNumber || "—"} theme={theme} />
-              <InfoChip icon="coffee" label="Mess" value={user?.assignedMess || "—"} theme={theme} />
-              <InfoChip
-                icon="activity"
-                label="Status"
-                value={user?.attendanceStatus === "entered" ? "In ✓" : "Out"}
-                theme={theme}
-              />
-            </View>
-          </AnimatedCard>
-
-          <AnimatedCard style={styles.card}>
-            <Text style={[styles.sectionLabel, { color: theme.text }]}>My Details</Text>
-            {[
-              { icon: "hash", label: "Roll No", val: user?.rollNumber || "—" },
-              { icon: "phone", label: "Contact", val: user?.contactNumber || user?.phone || "—" },
-              { icon: "map-pin", label: "Area", val: user?.area || "—" },
-              { icon: "coffee", label: "Mess", val: user?.assignedMess || "—" },
-            ].map((d) => (
-              <View key={d.label} style={[styles.detailItem, { borderBottomColor: theme.border }]}>
-                <Feather name={d.icon as any} size={14} color={theme.tint} />
-                <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>{d.label}</Text>
-                <Text style={[styles.detailValue, { color: theme.text }]}>{d.val}</Text>
-              </View>
-            ))}
-          </AnimatedCard>
-
-          {/* Lost & Found quick access for students */}
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/lostandfound"); }}
-            style={[styles.lostFoundBanner, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          >
-            <View style={[styles.iconBox, { backgroundColor: "#f59e0b20" }]}>
-              <Feather name="package" size={20} color="#f59e0b" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Lost & Found</Text>
-              <Text style={[styles.cardSub, { color: theme.textSecondary }]}>Report a missing item or browse complaints</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color={theme.textTertiary} />
-          </Pressable>
-        </>
-      )}
 
       {/* VOLUNTEER (non-coordinator) DASHBOARD */}
-      {!isStudent && !isCoordinator && (
+      {!isCoordinator && (
         <>
           <AnimatedCard style={styles.card}>
             <View style={styles.cardHeader}>
@@ -275,7 +218,7 @@ export default function HomeScreen() {
             {[
               { label: "Search", icon: "search", path: "/admin/search", color: theme.tint },
               { label: "Inventory", icon: "package", path: "/admin/inventory-table", color: "#f59e0b" },
-              { label: "Lost & Found", icon: "package", path: "/(tabs)/lostandfound", color: "#8b5cf6" },
+              { label: "Mess Cards", icon: "coffee", path: "/(tabs)/lostandfound", color: "#22c55e" },
             ].map(({ label, icon, path, color }) => (
               <Pressable
                 key={label}
@@ -301,7 +244,7 @@ export default function HomeScreen() {
               <View style={styles.statsRow}>
                 <StatBox label="Students" value={reportSummary.totalStudents} color={theme.tint} theme={theme} />
                 <StatBox label="Hostels" value={reportSummary.totalHostels} color="#22c55e" theme={theme} />
-                <StatBox label="Lost Items" value={reportSummary.totalLostItems} color="#f59e0b" theme={theme} />
+                <StatBox label="Announcements" value={reportSummary.totalAnnouncements} color="#8b5cf6" theme={theme} />
               </View>
             </AnimatedCard>
           )}
@@ -340,7 +283,7 @@ export default function HomeScreen() {
             </View>
           </AnimatedCard>
 
-          {/* Mess Attendance Highlights */}
+          {/* Mess Card Stats */}
           <AnimatedCard style={[styles.card, { borderColor: "#22c55e30", borderWidth: 1.5 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -348,7 +291,7 @@ export default function HomeScreen() {
                   <Feather name="coffee" size={16} color="#22c55e" />
                 </View>
                 <View>
-                  <Text style={[styles.sectionLabel, { color: theme.text, marginBottom: 0 }]}>Mess Attendance</Text>
+                  <Text style={[styles.sectionLabel, { color: theme.text, marginBottom: 0 }]}>Mess Cards</Text>
                   <Text style={[{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary }]}>Live · Today</Text>
                 </View>
               </View>
@@ -357,27 +300,10 @@ export default function HomeScreen() {
               </Pressable>
             </View>
             <View style={styles.statsRow}>
-              {[
-                { label: "Breakfast", key: "breakfast", color: "#f59e0b" },
-                { label: "Lunch", key: "lunch", color: "#22c55e" },
-                { label: "Dinner", key: "dinner", color: "#6366f1" },
-              ].map(({ label, key, color }) => (
-                <View key={key} style={[styles.messStatBox, { backgroundColor: color + "12", borderColor: color + "30" }]}>
-                  <Text style={[styles.messStatNum, { color }]}>
-                    {messStats?.byMeal?.[key]?.present ?? 0}
-                  </Text>
-                  <Text style={[styles.messStatLabel, { color: theme.textSecondary }]}>{label}</Text>
-                </View>
-              ))}
+              <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
+              <StatBox label="Card Given" value={messStats?.cardGivenCount ?? 0} color="#22c55e" theme={theme} />
+              <StatBox label="Pending" value={(attStats?.total ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
             </View>
-            {(messStats?.totalMarked || 0) > 0 && (
-              <View style={[styles.messHighlight, { backgroundColor: "#22c55e12", borderColor: "#22c55e30" }]}>
-                <Feather name="users" size={13} color="#22c55e" />
-                <Text style={[styles.messHighlightText, { color: "#22c55e" }]}>
-                  {messStats.presentCount} students marked present across all meals today
-                </Text>
-              </View>
-            )}
           </AnimatedCard>
 
           <View style={styles.quickGrid}>

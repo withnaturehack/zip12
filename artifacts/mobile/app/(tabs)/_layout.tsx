@@ -83,8 +83,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="lostandfound"
         options={{
-          title: isStudent ? "Lost & Found" : "Attendance",
-          tabBarIcon: ({ color }) => <Feather name={isStudent ? "search" : "check-square"} size={22} color={color} />,
+          title: "Attendance",
+          tabBarIcon: ({ color }) => <Feather name="check-square" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

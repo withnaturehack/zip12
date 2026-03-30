@@ -1,16 +1,15 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable,
   RefreshControl, Platform, useColorScheme, ActivityIndicator,
-  Modal, TextInput, ScrollView, Alert, Animated,
+  Modal, TextInput, ScrollView, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useAuth, useApiRequest } from "@/context/AuthContext";
-import { AnimatedCard } from "@/components/ui/AnimatedCard";
+import { useApiRequest } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
 function formatTime(ts: string | null | undefined): string {
@@ -20,45 +19,14 @@ function formatTime(ts: string | null | undefined): string {
 
 // ─── FAB Menu ──────────────────────────────────────────────────────────────────
 
-function FloatingMenu({ theme, onNewLostItem, onNewNotification, canNotify = false }: {
-  theme: any; onNewLostItem: () => void; onNewNotification: () => void; canNotify?: boolean;
+function NotificationFAB({ theme, onNewNotification }: {
+  theme: any; onNewNotification: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  const toggle = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Animated.spring(rotation, { toValue: open ? 0 : 1, useNativeDriver: true }).start();
-    setOpen(o => !o);
-  };
-
-  const rotate = rotation.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] });
-
-  const menuItems = [
-    ...(canNotify ? [{ icon: "bell", label: "Send Notification", color: "#f59e0b", action: onNewNotification }] : []),
-    { icon: "package", label: "Report Lost Item", color: "#8b5cf6", action: onNewLostItem },
-  ];
-
   return (
     <View style={styles.fabContainer} pointerEvents="box-none">
-      {open && <Pressable style={styles.fabBackdrop} onPress={toggle} />}
-      {open && (
-        <View style={styles.fabMenu}>
-          {menuItems.map(item => (
-            <Pressable key={item.label} onPress={() => { setOpen(false); rotation.setValue(0); item.action(); }}
-              style={[styles.fabMenuItem, { backgroundColor: theme.surface, borderColor: item.color + "50" }]}>
-              <View style={[styles.fabMenuIcon, { backgroundColor: item.color + "20" }]}>
-                <Feather name={item.icon as any} size={16} color={item.color} />
-              </View>
-              <Text style={[styles.fabMenuLabel, { color: theme.text }]}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      <Pressable onPress={toggle} style={[styles.fab, { backgroundColor: theme.tint }]}>
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Feather name="plus" size={24} color="#fff" />
-        </Animated.View>
+      <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onNewNotification(); }}
+        style={[styles.fab, { backgroundColor: "#f59e0b" }]}>
+        <Feather name="bell" size={22} color="#fff" />
       </Pressable>
     </View>
   );
@@ -114,59 +82,6 @@ function NotificationModal({ visible, onClose, theme, request, qc }: {
   );
 }
 
-// ─── Lost Item Form Modal ──────────────────────────────────────────────────────
-
-function LostFoundFormModal({ visible, onClose, theme, request, qc }: {
-  visible: boolean; onClose: () => void; theme: any; request: any; qc: any;
-}) {
-  const [formTitle, setFormTitle] = useState("");
-  const [formDesc, setFormDesc] = useState("");
-  const [formLocation, setFormLocation] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const close = () => { setFormTitle(""); setFormDesc(""); setFormLocation(""); onClose(); };
-
-  const submit = async () => {
-    if (!formTitle.trim()) return;
-    setSubmitting(true);
-    try {
-      await request("/lostitems", { method: "POST", body: JSON.stringify({ title: formTitle, description: formDesc, location: formLocation }) });
-      qc.invalidateQueries({ queryKey: ["lostitems"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      close();
-    } catch { }
-    setSubmitting(false);
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable style={styles.modalOverlay} onPress={close}>
-        <Pressable style={[styles.modalSheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
-          <View style={styles.modalHandle} />
-          <Text style={[styles.modalTitle, { color: theme.text }]}>Report Lost Item</Text>
-          <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>Help others find it</Text>
-          <TextInput placeholder="Item name *" placeholderTextColor={theme.textTertiary}
-            style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={formTitle} onChangeText={setFormTitle} />
-          <TextInput placeholder="Description" placeholderTextColor={theme.textTertiary}
-            style={[styles.input, styles.textArea, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={formDesc} onChangeText={setFormDesc} multiline numberOfLines={3} />
-          <TextInput placeholder="Last seen location (e.g. Mess, Library)" placeholderTextColor={theme.textTertiary}
-            style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={formLocation} onChangeText={setFormLocation} />
-          <View style={styles.modalActions}>
-            <Pressable onPress={close} style={[styles.cancelBtn, { borderColor: theme.border }]}>
-              <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
-            </Pressable>
-            <Pressable onPress={submit} disabled={submitting || !formTitle.trim()} style={[styles.submitBtn, { backgroundColor: formTitle.trim() ? theme.tint : theme.border }]}>
-              {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.submitBtnText}>Submit</Text>}
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
 
 // ─── ROOM ATTENDANCE VIEW ──────────────────────────────────────────────────────
 
@@ -562,6 +477,7 @@ function MessAttendanceView({ theme }: { theme: any }) {
           )}
           renderItem={({ item }) => {
             const given = !!item.inventory?.messCard;
+            const givenAt = item.inventory?.messCardGivenAt;
             const isToggling = togglingId === item.id;
 
             return (
@@ -579,6 +495,11 @@ function MessAttendanceView({ theme }: { theme: any }) {
                   <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                     {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
                   </Text>
+                  {given && givenAt ? (
+                    <Text style={[styles.studentMeta, { color: "#22c55e" }]}>
+                      <Feather name="clock" size={10} /> Given at {formatTime(givenAt)}
+                    </Text>
+                  ) : null}
                 </View>
                 <Pressable
                   onPress={() => toggleMessCard(item.id, given)}
@@ -605,77 +526,21 @@ function MessAttendanceView({ theme }: { theme: any }) {
   );
 }
 
-// ─── LOST ITEMS LIST VIEW ─────────────────────────────────────────────────────
-
-function LostItemsListView({ theme }: { theme: any }) {
-  const request = useApiRequest();
-  const [refreshing, setRefreshing] = useState(false);
-  const { data: items = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ["lostitems"],
-    queryFn: () => request("/lostitems"),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
-
-  const statusColor = (s: string) => s === "found" ? "#22c55e" : s === "claimed" ? "#8b5cf6" : "#f59e0b";
-  const statusLabel = (s: string) => s === "found" ? "Found" : s === "claimed" ? "Claimed" : "Lost";
-
-  return (
-    <FlatList
-      data={items as any[]}
-      keyExtractor={item => item.id}
-      contentContainerStyle={{ padding: 14, paddingBottom: 120 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-      ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-      ListEmptyComponent={() =>
-        isLoading ? <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /></View> : (
-          <View style={styles.emptyState}>
-            <Feather name="package" size={48} color={theme.textTertiary} />
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No items reported yet</Text>
-          </View>
-        )
-      }
-      renderItem={({ item }) => (
-        <View style={[styles.lostCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <View style={[styles.lostIcon, { backgroundColor: statusColor(item.status) + "20" }]}>
-            <Feather name="package" size={18} color={statusColor(item.status)} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.studentName, { color: theme.text }]}>{item.title}</Text>
-            {item.description ? <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text> : null}
-            <View style={styles.metaRow}>
-              {item.location ? <View style={styles.metaChip}><Feather name="map-pin" size={10} color={theme.textTertiary} /><Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.location}</Text></View> : null}
-              <View style={styles.metaChip}><Feather name="user" size={10} color={theme.textTertiary} /><Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.reportedByName}</Text></View>
-              <Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>
-            </View>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor(item.status) + "20" }]}>
-            <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>{statusLabel(item.status)}</Text>
-          </View>
-        </View>
-      )}
-    />
-  );
-}
-
-// ─── ATTENDANCE SCREEN (staff/volunteer/admin) ─────────────────────────────────
+// ─── ATTENDANCE SCREEN ─────────────────────────────────────────────────────────
 
 const TAB_CONFIG = [
-  { key: "room",  icon: "home",    label: "Room",  color: "#6366f1" },
-  { key: "mess",  icon: "coffee",  label: "Mess",  color: "#22c55e" },
-  { key: "items", icon: "package", label: "Lost",  color: "#f59e0b" },
+  { key: "room", icon: "home",   label: "Room", color: "#6366f1" },
+  { key: "mess", icon: "coffee", label: "Mess", color: "#22c55e" },
 ] as const;
-type AttTab = "room" | "mess" | "items";
+type AttTab = "room" | "mess";
 
 function AttendanceScreen({ theme, topPad }: { theme: any; topPad: number }) {
   const request = useApiRequest();
   const qc = useQueryClient();
-  const [showLostModal, setShowLostModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [activeTab, setActiveTab] = useState<AttTab>("room");
 
-  const pageTitles: Record<AttTab, string> = { room: "Room Attendance", mess: "Mess Cards", items: "Lost & Found" };
+  const pageTitles: Record<AttTab, string> = { room: "Room Attendance", mess: "Mess Cards" };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -701,115 +566,23 @@ function AttendanceScreen({ theme, topPad }: { theme: any; topPad: number }) {
         </View>
       </View>
 
-      {activeTab === "room" ? <RoomAttendanceView theme={theme} />
-        : activeTab === "mess" ? <MessAttendanceView theme={theme} />
-        : <LostItemsListView theme={theme} />}
+      {activeTab === "room" ? <RoomAttendanceView theme={theme} /> : <MessAttendanceView theme={theme} />}
 
       <NotificationModal visible={showNotifModal} onClose={() => setShowNotifModal(false)} theme={theme} request={request} qc={qc} />
-      <LostFoundFormModal visible={showLostModal} onClose={() => setShowLostModal(false)} theme={theme} request={request} qc={qc} />
-      <FloatingMenu theme={theme} canNotify={true} onNewLostItem={() => setShowLostModal(true)} onNewNotification={() => setShowNotifModal(true)} />
-    </View>
-  );
-}
-
-// ─── LOST & FOUND SCREEN (students) ───────────────────────────────────────────
-
-function LostFoundScreen({ theme, topPad }: { theme: any; topPad: number }) {
-  const request = useApiRequest();
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const [refreshing, setRefreshing] = useState(false);
-  const [showLostModal, setShowLostModal] = useState(false);
-  const [showNotifModal, setShowNotifModal] = useState(false);
-
-  const isStaff = user?.role && user.role !== "student";
-
-  const { data: items = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ["lostitems"],
-    queryFn: () => request("/lostitems"),
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-
-  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
-  const statusColor = (s: string) => s === "found" ? "#22c55e" : s === "claimed" ? "#8b5cf6" : "#f59e0b";
-  const statusLabel = (s: string) => s === "found" ? "Found" : s === "claimed" ? "Claimed" : "Lost";
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.pageTitle, { color: theme.text }]}>Lost & Found</Text>
-            <Text style={[styles.pageDate, { color: theme.textSecondary }]}>{items.length} item{items.length !== 1 ? "s" : ""} reported</Text>
-          </View>
-          <Pressable onPress={() => setShowLostModal(true)} style={[styles.reportBtn, { backgroundColor: theme.tint }]}>
-            <Feather name="plus" size={16} color="#fff" />
-            <Text style={styles.reportBtnText}>Report</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <FlatList
-        data={items}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 14, paddingBottom: 120 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        ListEmptyComponent={() =>
-          isLoading ? (<View><CardSkeleton /><CardSkeleton /></View>) : (
-            <View style={styles.emptyState}>
-              <Feather name="package" size={48} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No items reported yet</Text>
-              <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>Tap "Report" to log a lost item</Text>
-            </View>
-          )
-        }
-        renderItem={({ item }) => (
-          <AnimatedCard style={{}}>
-            <View style={styles.lostItemRow}>
-              <View style={[styles.lostIcon, { backgroundColor: statusColor(item.status) + "20" }]}>
-                <Feather name="package" size={18} color={statusColor(item.status)} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.studentName, { color: theme.text }]}>{item.title}</Text>
-                {item.description ? <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text> : null}
-                <View style={styles.metaRow}>
-                  {item.location ? <View style={styles.metaChip}><Feather name="map-pin" size={10} color={theme.textTertiary} /><Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.location}</Text></View> : null}
-                  <View style={styles.metaChip}><Feather name="user" size={10} color={theme.textTertiary} /><Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{item.reportedByName}</Text></View>
-                  <Text style={[styles.metaChipText, { color: theme.textTertiary }]}>{new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>
-                </View>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: statusColor(item.status) + "20" }]}>
-                <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>{statusLabel(item.status)}</Text>
-              </View>
-            </View>
-          </AnimatedCard>
-        )}
-      />
-
-      <LostFoundFormModal visible={showLostModal} onClose={() => setShowLostModal(false)} theme={theme} request={request} qc={qc} />
-      {isStaff && (
-        <>
-          <NotificationModal visible={showNotifModal} onClose={() => setShowNotifModal(false)} theme={theme} request={request} qc={qc} />
-          <FloatingMenu theme={theme} canNotify={true} onNewLostItem={() => setShowLostModal(true)} onNewNotification={() => setShowNotifModal(true)} />
-        </>
-      )}
+      <NotificationFAB theme={theme} onNewNotification={() => setShowNotifModal(true)} />
     </View>
   );
 }
 
 // ─── ROOT ──────────────────────────────────────────────────────────────────────
 
-export default function LostFoundTab() {
+export default function AttendanceTab() {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
-  const { isStudent } = useAuth();
 
-  if (isStudent) return <LostFoundScreen theme={theme} topPad={topPad} />;
   return <AttendanceScreen theme={theme} topPad={topPad} />;
 }
 
