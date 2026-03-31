@@ -59,11 +59,14 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
       mattress: inventoryMap[s.id].mattress,
       bedsheet: inventoryMap[s.id].bedsheet,
       pillow: inventoryMap[s.id].pillow,
+      mattressSubmitted: inventoryMap[s.id].mattressSubmitted,
+      bedsheetSubmitted: inventoryMap[s.id].bedsheetSubmitted,
+      pillowSubmitted: inventoryMap[s.id].pillowSubmitted,
       messCard: inventoryMap[s.id].messCard,
       messCardGivenAt: inventoryMap[s.id].messCardGivenAt?.toISOString() || null,
       inventoryLocked: inventoryMap[s.id].inventoryLocked,
       lockedAt: inventoryMap[s.id].lockedAt?.toISOString() || null,
-    } : { mattress: false, bedsheet: false, pillow: false, messCard: false, messCardGivenAt: null, inventoryLocked: false, lockedAt: null },
+    } : { mattress: false, bedsheet: false, pillow: false, mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false, messCard: false, messCardGivenAt: null, inventoryLocked: false, lockedAt: null },
     hasInventory: !!inventoryMap[s.id],
   }));
 
@@ -131,7 +134,7 @@ router.get("/inventory/:studentId", requireAuth, async (req: AuthRequest, res) =
     : { studentId, mattress: false, bedsheet: false, pillow: false, messCard: false, inventoryLocked: false, lockedAt: null });
 });
 
-// PATCH /api/attendance/inventory/:studentId — update room inventory (blocked if locked)
+// PATCH /api/attendance/inventory/:studentId — update room inventory (blocked if individual item already submitted)
 router.patch("/inventory/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
   const { mattress, bedsheet, pillow } = req.body;
   const { studentId } = req.params;
@@ -144,6 +147,17 @@ router.patch("/inventory/:studentId", requireVolunteer, async (req: AuthRequest,
   if (existing?.inventoryLocked) {
     res.status(403).json({ message: "Inventory is locked and cannot be edited." });
     return;
+  }
+
+  // Block toggling an item that is already individually submitted
+  if (mattress !== undefined && existing?.mattressSubmitted) {
+    res.status(403).json({ message: "Mattress already submitted." }); return;
+  }
+  if (bedsheet !== undefined && existing?.bedsheetSubmitted) {
+    res.status(403).json({ message: "Bedsheet already submitted." }); return;
+  }
+  if (pillow !== undefined && existing?.pillowSubmitted) {
+    res.status(403).json({ message: "Pillow already submitted." }); return;
   }
 
   if (existing) {
@@ -169,6 +183,73 @@ router.patch("/inventory/:studentId", requireVolunteer, async (req: AuthRequest,
     }).returning();
     res.json({ ...record, lockedAt: null });
   }
+});
+
+// POST /api/attendance/inventory/:studentId/submit-item — submit (lock) a single inventory item
+router.post("/inventory/:studentId/submit-item", requireVolunteer, async (req: AuthRequest, res) => {
+  const { studentId } = req.params;
+  const { item } = req.body; // "mattress" | "bedsheet" | "pillow"
+
+  if (!["mattress", "bedsheet", "pillow"].includes(item)) {
+    res.status(400).json({ message: "item must be mattress, bedsheet, or pillow" }); return;
+  }
+
+  const [student] = await db.select({ hostelId: usersTable.hostelId }).from(usersTable).where(eq(usersTable.id, studentId));
+  if (!student) { res.status(404).json({ message: "Student not found" }); return; }
+
+  const [existing] = await db.select().from(studentInventoryTable).where(eq(studentInventoryTable.studentId, studentId));
+
+  const submittedField = `${item}Submitted` as "mattressSubmitted" | "bedsheetSubmitted" | "pillowSubmitted";
+
+  if (existing?.[submittedField]) {
+    res.json({ ...existing, lockedAt: existing.lockedAt?.toISOString() || null, alreadySubmitted: true });
+    return;
+  }
+
+  const updateData: Record<string, any> = {
+    [submittedField]: true,
+    updatedBy: req.userId!,
+    updatedAt: new Date(),
+  };
+
+  let record;
+  if (existing) {
+    // Check if all 3 will be submitted after this → auto-lock
+    const allDone =
+      (item === "mattress" || existing.mattressSubmitted) &&
+      (item === "bedsheet" || existing.bedsheetSubmitted) &&
+      (item === "pillow" || existing.pillowSubmitted);
+
+    if (allDone) {
+      updateData.inventoryLocked = true;
+      updateData.lockedBy = req.userId!;
+      updateData.lockedAt = new Date();
+    }
+
+    [record] = await db.update(studentInventoryTable)
+      .set(updateData)
+      .where(eq(studentInventoryTable.studentId, studentId))
+      .returning();
+  } else {
+    // Create a new record with this item submitted
+    const allDone = item === "mattress" && item === "bedsheet" && item === "pillow"; // impossible for single
+    [record] = await db.insert(studentInventoryTable).values({
+      id: generateId(),
+      studentId,
+      hostelId: student.hostelId || "",
+      mattress: item === "mattress",
+      bedsheet: item === "bedsheet",
+      pillow: item === "pillow",
+      mattressSubmitted: item === "mattress",
+      bedsheetSubmitted: item === "bedsheet",
+      pillowSubmitted: item === "pillow",
+      messCard: false,
+      inventoryLocked: false,
+      updatedBy: req.userId!,
+    }).returning();
+  }
+
+  res.json({ ...record, lockedAt: record.lockedAt?.toISOString() || null });
 });
 
 // POST /api/attendance/inventory/:studentId/submit — lock inventory permanently
