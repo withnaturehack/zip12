@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, checkinsTable, usersTable, hostelsTable } from "@workspace/db";
+import { db, checkinsTable, usersTable, studentInventoryTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { requireAuth, requireVolunteer, requireAdmin, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
+import { requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
 const router = Router();
 
@@ -47,14 +47,25 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
   });
 });
 
-// PATCH /api/checkins/:id/checkout — mark checkout time
+// PATCH /api/checkins/:id/checkout — mark checkout time (blocked if inventory not submitted)
 router.patch("/:id/checkout", requireVolunteer, async (req: AuthRequest, res) => {
+  const [checkin] = await db.select().from(checkinsTable).where(eq(checkinsTable.id, req.params.id));
+  if (!checkin) { res.status(404).json({ message: "Checkin record not found" }); return; }
+
+  // Block checkout if inventory not yet submitted/locked
+  const [inv] = await db.select().from(studentInventoryTable)
+    .where(eq(studentInventoryTable.studentId, checkin.studentId));
+
+  if (!inv?.inventoryLocked) {
+    res.status(400).json({ message: "Cannot check out: inventory must be submitted first." });
+    return;
+  }
+
   const [record] = await db.update(checkinsTable)
     .set({ checkOutTime: new Date() })
     .where(eq(checkinsTable.id, req.params.id))
     .returning();
 
-  if (!record) { res.status(404).json({ message: "Checkin record not found" }); return; }
   res.json({
     ...record,
     checkInTime: record.checkInTime?.toISOString() || null,

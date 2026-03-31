@@ -28,6 +28,17 @@ export default function HomeScreen() {
 
   const [refreshing, setRefreshing] = React.useState(false);
 
+  // Parse assigned hostel IDs for admin/coordinator
+  const isAdmin = user?.role === "admin" || user?.role === "coordinator";
+  const assignedHostelIds: string[] = React.useMemo(() => {
+    try {
+      const raw = user?.assignedHostelIds;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  }, [user?.assignedHostelIds]);
+
   const { data: announcements, refetch: refetchAnn, isLoading: annLoading } = useQuery({
     queryKey: ["announcements"],
     queryFn: () => request("/announcements"),
@@ -80,6 +91,31 @@ export default function HomeScreen() {
     refetchInterval: 60000,
     staleTime: 30000,
   });
+
+  // Fetch all hostels to cross-reference assigned hostel IDs
+  const { data: allHostels = [] } = useQuery<any[]>({
+    queryKey: ["hostels"],
+    queryFn: () => request("/hostels"),
+    enabled: isAdmin && assignedHostelIds.length > 0,
+    staleTime: 60000,
+  });
+
+  const assignedHostels = React.useMemo(() => {
+    if (!Array.isArray(allHostels)) return [];
+    return (allHostels as any[]).filter((h: any) => assignedHostelIds.includes(h.id));
+  }, [allHostels, assignedHostelIds]);
+
+  // Fetch inventory stats for assigned hostels (admin dashboard)
+  const { data: invStats } = useQuery<any>({
+    queryKey: ["inv-stats"],
+    queryFn: () => request("/inventory-simple"),
+    enabled: isCoordinator,
+    refetchInterval: 8000,
+    staleTime: 5000,
+  });
+  const invStatsArr = Array.isArray(invStats) ? invStats as any[] : [];
+  const invSubmitted = invStatsArr.filter(s => s.inventory?.inventoryLocked).length;
+  const invTotal = invStatsArr.length;
 
   const activeStatusMutation = useMutation({
     mutationFn: ({ goActive, remark }: { goActive: boolean; remark?: string }) =>
@@ -182,7 +218,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-
       {/* VOLUNTEER (non-coordinator) DASHBOARD */}
       {!isCoordinator && (
         <>
@@ -238,6 +273,54 @@ export default function HomeScreen() {
       {/* COORDINATOR / ADMIN / SUPERADMIN DASHBOARD */}
       {isCoordinator && (
         <>
+          {/* ── Assigned Hostel Highlights (admin/coordinator only, not superadmin) ── */}
+          {isAdmin && assignedHostels.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { color: theme.text, paddingHorizontal: 20, marginBottom: 8 }]}>
+                Your Assigned Hostels
+              </Text>
+              {assignedHostels.map((h: any) => (
+                <Pressable
+                  key={h.id}
+                  onPress={() => { Haptics.selectionAsync(); router.push("/admin/hostels" as any); }}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+                >
+                  <AnimatedCard style={[styles.card, styles.assignedHostelCard]}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <View style={[styles.hostelIconBox, { backgroundColor: theme.tint + "20" }]}>
+                        <Feather name="home" size={22} color={theme.tint} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={[styles.hostelHighlightName, { color: theme.text }]}>{h.name}</Text>
+                          <View style={[styles.assignedBadge, { backgroundColor: theme.tint + "20", borderColor: theme.tint + "50" }]}>
+                            <Text style={[styles.assignedBadgeText, { color: theme.tint }]}>Assigned</Text>
+                          </View>
+                        </View>
+                        {h.location ? <Text style={[styles.hostelHighlightLoc, { color: theme.textSecondary }]}>{h.location}</Text> : null}
+                        <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
+                          {h.wardenName ? (
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                              <Feather name="user" size={11} color={theme.textTertiary} />
+                              <Text style={[styles.hostelHighlightMeta, { color: theme.textTertiary }]}>{h.wardenName}</Text>
+                            </View>
+                          ) : null}
+                          {h.totalRooms ? (
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                              <Feather name="layers" size={11} color={theme.textTertiary} />
+                              <Text style={[styles.hostelHighlightMeta, { color: theme.textTertiary }]}>{h.totalRooms} rooms</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                      <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+                    </View>
+                  </AnimatedCard>
+                </Pressable>
+              ))}
+            </>
+          )}
+
           {reportSummary && (
             <AnimatedCard style={styles.card}>
               <Text style={[styles.sectionLabel, { color: theme.text }]}>System Overview</Text>
@@ -283,6 +366,37 @@ export default function HomeScreen() {
             </View>
           </AnimatedCard>
 
+          {/* Inventory Stats */}
+          <AnimatedCard style={[styles.card, { borderColor: "#06b6d430", borderWidth: 1.5 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#06b6d420", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name="package" size={16} color="#06b6d4" />
+                </View>
+                <View>
+                  <Text style={[styles.sectionLabel, { color: theme.text, marginBottom: 0 }]}>Inventory Status</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary }}>Live · All Hostels</Text>
+                </View>
+              </View>
+              <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/admin/inventory-table" as any); }} style={{ padding: 4 }}>
+                <Feather name="arrow-right" size={16} color={theme.textTertiary} />
+              </Pressable>
+            </View>
+            <View style={styles.statsRow}>
+              <StatBox label="Total" value={invTotal} color={theme.text} theme={theme} />
+              <StatBox label="Submitted" value={invSubmitted} color="#06b6d4" theme={theme} />
+              <StatBox label="Pending" value={invTotal - invSubmitted} color="#f59e0b" theme={theme} />
+            </View>
+            {invTotal > 0 && invTotal - invSubmitted > 0 && (
+              <View style={[styles.missingAlert, { backgroundColor: "#fef3c715", borderColor: "#f59e0b40" }]}>
+                <Feather name="alert-triangle" size={13} color="#f59e0b" />
+                <Text style={[styles.missingAlertText, { color: "#f59e0b" }]}>
+                  {invTotal - invSubmitted} students have pending inventory
+                </Text>
+              </View>
+            )}
+          </AnimatedCard>
+
           {/* Mess Card Stats */}
           <AnimatedCard style={[styles.card, { borderColor: "#22c55e30", borderWidth: 1.5 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -313,7 +427,8 @@ export default function HomeScreen() {
               { label: "Inventory", icon: "package", path: "/admin/inventory-table", color: "#f59e0b" },
               { label: "Search", icon: "search", path: "/admin/search", color: "#3b82f6" },
               { label: "Staff Status", icon: "activity", path: "/admin/staff-status", color: "#22c55e" },
-              { label: "Post Alert", icon: "volume-2", path: "/admin/post-announcement", color: "#8b5cf6" },
+              { label: "Hostels", icon: "home", path: "/admin/hostels", color: "#8b5cf6" },
+              { label: "Post Alert", icon: "volume-2", path: "/admin/post-announcement", color: "#f59e0b" },
               ...(isSuperAdmin
                 ? [
                     { label: "Activity Logs", icon: "clock", path: "/admin/activity-logs", color: "#06b6d4" },
@@ -372,16 +487,6 @@ export default function HomeScreen() {
   );
 }
 
-function InfoChip({ icon, label, value, theme }: { icon: string; label: string; value: string; theme: any }) {
-  return (
-    <View style={[styles.chip, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Feather name={icon as any} size={13} color={theme.tint} />
-      <Text style={[styles.chipLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[styles.chipValue, { color: theme.text }]}>{value}</Text>
-    </View>
-  );
-}
-
 function StatBox({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
   return (
     <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -396,28 +501,18 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, marginBottom: 16, gap: 12 },
   greeting: { fontSize: 14, fontFamily: "Inter_400Regular" },
   userName: { fontSize: 26, fontFamily: "Inter_700Bold" },
-  // Status banner
   statusBanner: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 20, marginBottom: 14, padding: 14, borderRadius: 14, borderWidth: 1.5 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusText: { fontSize: 14, fontFamily: "Inter_700Bold" },
   statusSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   statusToggleBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, minWidth: 90, alignItems: "center", justifyContent: "center" },
   statusToggleTxt: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  // Lost & Found banner
-  lostFoundBanner: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 20, marginBottom: 14, padding: 14, borderRadius: 14, borderWidth: 1 },
   card: { marginHorizontal: 20, marginBottom: 12 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   cardTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   cardSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
   sectionLabel: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  infoRow: { flexDirection: "row", gap: 8 },
-  chip: { alignItems: "center", gap: 3, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1, flex: 1 },
-  chipLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  chipValue: { fontSize: 13, fontFamily: "Inter_700Bold", textAlign: "center" },
-  detailItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1 },
-  detailLabel: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
-  detailValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
   statBox: { flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 10, borderWidth: 1, gap: 3 },
   statVal: { fontSize: 22, fontFamily: "Inter_700Bold" },
@@ -435,10 +530,14 @@ const styles = StyleSheet.create({
   annDate: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
   emptyState: { alignItems: "center", paddingVertical: 24, gap: 8 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  // Mess stats
-  messStatBox: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 10, borderWidth: 1, gap: 2 },
-  messStatNum: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  messStatLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  messHighlight: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
-  messHighlightText: { fontSize: 12, fontFamily: "Inter_600SemiBold", flex: 1 },
+  // Assigned hostel card
+  assignedHostelCard: { borderWidth: 2 },
+  hostelIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  hostelHighlightName: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  hostelHighlightLoc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  hostelHighlightMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  assignedBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  assignedBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  missingAlert: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
+  missingAlertText: { fontSize: 12, fontFamily: "Inter_600SemiBold", flex: 1 },
 });

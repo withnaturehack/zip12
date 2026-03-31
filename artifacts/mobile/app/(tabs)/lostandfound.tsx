@@ -9,27 +9,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { useApiRequest } from "@/context/AuthContext";
+import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
 function formatTime(ts: string | null | undefined): string {
   if (!ts) return "—";
   return new Date(ts).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" });
-}
-
-// ─── FAB Menu ──────────────────────────────────────────────────────────────────
-
-function NotificationFAB({ theme, onNewNotification }: {
-  theme: any; onNewNotification: () => void;
-}) {
-  return (
-    <View style={styles.fabContainer} pointerEvents="box-none">
-      <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onNewNotification(); }}
-        style={[styles.fab, { backgroundColor: "#f59e0b" }]}>
-        <Feather name="bell" size={22} color="#fff" />
-      </Pressable>
-    </View>
-  );
 }
 
 // ─── Notification Modal ────────────────────────────────────────────────────────
@@ -82,7 +67,6 @@ function NotificationModal({ visible, onClose, theme, request, qc }: {
   );
 }
 
-
 // ─── ROOM ATTENDANCE VIEW ──────────────────────────────────────────────────────
 
 function RoomAttendanceView({ theme }: { theme: any }) {
@@ -93,21 +77,22 @@ function RoomAttendanceView({ theme }: { theme: any }) {
   const [updatingInv, setUpdatingInv] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [checkingOutId, setCheckingOutId] = useState<string | null>(null);
+  const [submittingInvId, setSubmittingInvId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const today = new Date().toISOString().split("T")[0];
 
   const { data = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ["attendance", today],
     queryFn: () => request("/attendance"),
-    refetchInterval: 15000,
-    staleTime: 5000,
+    refetchInterval: 8000,
+    staleTime: 4000,
   });
 
-  const { data: todayCheckins = [] } = useQuery<any[]>({
+  const { data: todayCheckins = [], refetch: refetchCheckins } = useQuery<any[]>({
     queryKey: ["checkins-today"],
-    queryFn: () => request("/checkins?limit=200"),
-    refetchInterval: 15000,
-    staleTime: 8000,
+    queryFn: () => request("/checkins?limit=300"),
+    refetchInterval: 8000,
+    staleTime: 4000,
   });
 
   const checkinMap: Record<string, any> = {};
@@ -125,7 +110,20 @@ function RoomAttendanceView({ theme }: { theme: any }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance"] }); },
   });
 
-  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
+  const submitInvMutation = useMutation({
+    mutationFn: (studentId: string) =>
+      request(`/attendance/inventory/${studentId}/submit`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      qc.invalidateQueries({ queryKey: ["checkins-today"] });
+    },
+  });
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refetch(), refetchCheckins()]);
+    setRefreshing(false);
+  }, [refetch, refetchCheckins]);
 
   const toggleAttendance = useCallback(async (studentId: string, current: string) => {
     if (current === "entered") return;
@@ -149,22 +147,37 @@ function RoomAttendanceView({ theme }: { theme: any }) {
     try {
       await request(`/checkins/${studentId}`, { method: "POST" });
       qc.invalidateQueries({ queryKey: ["checkins-today"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) { Alert.alert("Error", e.message || "Failed to check in"); }
     setCheckingInId(null);
   }, [request, qc]);
 
-  const markCheckout = useCallback(async (checkinId: string) => {
+  const markCheckout = useCallback(async (checkinId: string, studentId: string, inv: any) => {
+    if (!inv?.inventoryLocked) {
+      Alert.alert("Cannot Check Out", "Please submit the student's inventory before checking out.");
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCheckingOutId(checkinId);
     try {
       await request(`/checkins/${checkinId}/checkout`, { method: "PATCH" });
       qc.invalidateQueries({ queryKey: ["checkins-today"] });
+      qc.invalidateQueries({ queryKey: ["attendance"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) { Alert.alert("Error", e.message || "Failed to check out"); }
     setCheckingOutId(null);
   }, [request, qc]);
 
+  const submitInventory = useCallback(async (studentId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSubmittingInvId(studentId);
+    try {
+      await submitInvMutation.mutateAsync(studentId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { Alert.alert("Error", e.message || "Failed to submit inventory"); }
+    setSubmittingInvId(null);
+  }, [submitInvMutation]);
 
   const sq = search.trim().toLowerCase();
   const filtered = sq
@@ -177,6 +190,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
 
   const entered = data.filter((s: any) => s.attendance?.status === "entered").length;
   const checkedInCount = Object.keys(checkinMap).length;
+  const submittedCount = (data as any[]).filter((s: any) => s.inventory?.inventoryLocked).length;
   const total = data.length;
 
   return (
@@ -186,7 +200,7 @@ function RoomAttendanceView({ theme }: { theme: any }) {
         <StatPill label="Total" value={total} color={theme.text} theme={theme} />
         <StatPill label="In Campus" value={entered} color="#22c55e" theme={theme} />
         <StatPill label="Checked In" value={checkedInCount} color="#8b5cf6" theme={theme} />
-        <StatPill label="Pending" value={total - entered} color="#f59e0b" theme={theme} />
+        <StatPill label="Inv Done" value={submittedCount} color="#06b6d4" theme={theme} />
       </View>
 
       {/* Search bar */}
@@ -230,13 +244,18 @@ function RoomAttendanceView({ theme }: { theme: any }) {
             const isCheckingIn = checkingInId === item.id;
             const checkin = checkinMap[item.id];
             const isCheckingOut = checkingOutId === checkin?.id;
-            const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false };
+            const isSubmittingInv = submittingInvId === item.id;
+            const inv = item.inventory || { mattress: false, bedsheet: false, pillow: false, inventoryLocked: false };
             const allGiven = inv.mattress && inv.bedsheet && inv.pillow;
+            const isLocked = !!inv.inventoryLocked;
+            const missingItems = (["mattress", "bedsheet", "pillow"] as const).filter(f => !inv[f]);
+            const isCheckedIn = !!checkin && !checkin.checkOutTime;
+            const isCheckedOut = !!checkin?.checkOutTime;
 
             return (
-              <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: allGiven ? "#22c55e50" : isEntered ? "#6366f130" : theme.border }]}>
+              <View style={[styles.attCard, { backgroundColor: theme.surface, borderColor: isLocked ? "#22c55e50" : checkin ? "#8b5cf630" : theme.border }]}>
 
-                {/* ── Row 1: Student identity + campus status ── */}
+                {/* ── Row 1: Student identity + campus status + remark badges ── */}
                 <View style={styles.attTopRow}>
                   <View style={[styles.avatar, { backgroundColor: isEntered ? "#22c55e20" : theme.tint + "20" }]}>
                     <Text style={[styles.avatarText, { color: isEntered ? "#22c55e" : theme.tint }]}>
@@ -257,12 +276,25 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                     <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                       {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
                     </Text>
-                    {(item.contactNumber || item.phone) ? (
-                      <Text style={[styles.studentMeta, { color: theme.textTertiary }]}>
-                        <Feather name="phone" size={10} /> {item.contactNumber || item.phone}
-                      </Text>
-                    ) : null}
                   </View>
+                  {/* Remark badges — green or red */}
+                  {checkin && (
+                    <View style={styles.remarkBadges}>
+                      {isLocked ? (
+                        <View style={styles.remarkGreen}>
+                          <Feather name="check-circle" size={11} color="#16a34a" />
+                          <Text style={styles.remarkGreenText}>Submitted</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.remarkRed}>
+                          <Feather name="alert-circle" size={11} color="#dc2626" />
+                          <Text style={styles.remarkRedText}>
+                            {missingItems.length > 0 ? `Missing ${missingItems.length}` : "Not Submitted"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
 
                 {/* ── Row 2: Check In ── */}
@@ -288,50 +320,89 @@ function RoomAttendanceView({ theme }: { theme: any }) {
                   )}
                 </View>
 
-                {/* ── Row 3: Inventory (3 checkboxes) ── */}
-                <View style={[styles.invSection, { borderTopColor: theme.border }]}>
-                  <Text style={[styles.invSectionLabel, { color: theme.textSecondary }]}>
-                    <Feather name={allGiven ? "lock" : "box"} size={11} /> Inventory
-                  </Text>
-                  <View style={styles.invChipsRow}>
-                    {(["mattress", "bedsheet", "pillow"] as const).map(field => {
-                      const checked = !!inv[field];
-                      const isToggling = updatingInv === `${item.id}-${field}`;
-                      return (
-                        <Pressable key={field} onPress={() => !checked && toggleInventory(item.id, field, checked)}
-                          disabled={checked || isToggling}
-                          style={[styles.invChip, {
-                            backgroundColor: checked ? "#22c55e15" : theme.background,
-                            borderColor: checked ? "#22c55e60" : theme.border,
-                          }]}>
-                          {isToggling
-                            ? <ActivityIndicator size="small" color="#22c55e" style={{ width: 14 }} />
-                            : <Feather name={checked ? "check-circle" : "circle"} size={14} color={checked ? "#22c55e" : theme.textTertiary} />}
-                          <Text style={[styles.invChipText, { color: checked ? "#22c55e" : theme.textSecondary }]}>
-                            {field.charAt(0).toUpperCase() + field.slice(1)}
-                          </Text>
-                          {checked && <Feather name="lock" size={9} color="#22c55e" />}
-                        </Pressable>
-                      );
-                    })}
+                {/* ── Row 3: Inventory (3 buttons — unlocked only after check-in) ── */}
+                {checkin && !isCheckedOut && (
+                  <View style={[styles.invSection, { borderTopColor: theme.border }]}>
+                    <Text style={[styles.invSectionLabel, { color: isLocked ? "#16a34a" : theme.textSecondary }]}>
+                      <Feather name={isLocked ? "lock" : "unlock"} size={11} /> Inventory {isLocked ? "(Submitted)" : "(3 items)"}
+                    </Text>
+                    <View style={styles.invChipsRow}>
+                      {(["mattress", "bedsheet", "pillow"] as const).map(field => {
+                        const checked = !!inv[field];
+                        const isToggling = updatingInv === `${item.id}-${field}`;
+                        const disabled = isLocked || checked || isToggling;
+                        return (
+                          <Pressable key={field} onPress={() => !disabled && toggleInventory(item.id, field, checked)}
+                            disabled={disabled}
+                            style={[styles.invChip, {
+                              backgroundColor: checked ? "#22c55e15" : isLocked ? theme.surface : theme.background,
+                              borderColor: checked ? "#22c55e60" : isLocked ? theme.border : theme.border,
+                              opacity: isLocked && !checked ? 0.5 : 1,
+                            }]}>
+                            {isToggling
+                              ? <ActivityIndicator size="small" color="#22c55e" style={{ width: 14 }} />
+                              : <Feather name={checked ? "check-circle" : "circle"} size={14} color={checked ? "#22c55e" : theme.textTertiary} />}
+                            <Text style={[styles.invChipText, { color: checked ? "#22c55e" : theme.textSecondary }]}>
+                              {field.charAt(0).toUpperCase() + field.slice(1)}
+                            </Text>
+                            {checked && !isLocked && <Feather name="check" size={9} color="#22c55e" />}
+                            {isLocked && <Feather name="lock" size={9} color={checked ? "#22c55e" : theme.textTertiary} />}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    {/* Submit Inventory Button */}
+                    {!isLocked && (
+                      <Pressable
+                        onPress={() => submitInventory(item.id)}
+                        disabled={isSubmittingInv}
+                        style={[styles.submitInvBtn, {
+                          backgroundColor: allGiven ? "#06b6d4" : "#f59e0b",
+                          opacity: isSubmittingInv ? 0.6 : 1,
+                        }]}
+                      >
+                        {isSubmittingInv ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <Feather name="send" size={13} color="#fff" />
+                            <Text style={styles.submitInvBtnText}>
+                              {allGiven ? "Submit All 3 Items" : `Submit (${3 - missingItems.length}/3 given)`}
+                            </Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
                   </View>
-                </View>
+                )}
 
                 {/* ── Row 4: Check Out ── */}
                 <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
-                  <View style={[styles.actionIcon, { backgroundColor: checkin?.checkOutTime ? "#f59e0b20" : theme.background }]}>
-                    <Feather name="log-out" size={14} color={checkin?.checkOutTime ? "#f59e0b" : theme.textTertiary} />
+                  <View style={[styles.actionIcon, { backgroundColor: isCheckedOut ? "#f59e0b20" : theme.background }]}>
+                    <Feather name="log-out" size={14} color={isCheckedOut ? "#f59e0b" : theme.textTertiary} />
                   </View>
-                  {checkin?.checkOutTime ? (
+                  {isCheckedOut ? (
                     <View style={[styles.timeStampBadge, { flex: 1 }]}>
                       <Text style={[styles.timeStampLabel, { color: theme.textTertiary }]}>Check-out</Text>
                       <Text style={[styles.timeStampValue, { color: "#f59e0b" }]}>{formatTime(checkin.checkOutTime)}</Text>
                     </View>
                   ) : checkin ? (
                     <>
-                      <Text style={[styles.actionNone, { color: theme.textTertiary, flex: 1 }]}>Awaiting checkout</Text>
-                      <Pressable onPress={() => markCheckout(checkin.id)} disabled={isCheckingOut}
-                        style={[styles.actionBtn, { backgroundColor: "#f59e0b", opacity: isCheckingOut ? 0.6 : 1 }]}>
+                      {!isLocked ? (
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.actionNone, { color: "#dc2626" }]}>Submit inventory to enable checkout</Text>
+                        </View>
+                      ) : (
+                        <Text style={[styles.actionNone, { color: theme.textTertiary, flex: 1 }]}>Ready to check out</Text>
+                      )}
+                      <Pressable
+                        onPress={() => markCheckout(checkin.id, item.id, inv)}
+                        disabled={isCheckingOut || !isLocked}
+                        style={[styles.actionBtn, {
+                          backgroundColor: isLocked ? "#f59e0b" : "#94a3b8",
+                          opacity: isCheckingOut ? 0.6 : 1,
+                        }]}
+                      >
                         {isCheckingOut
                           ? <ActivityIndicator size="small" color="#fff" />
                           : <><Feather name="log-out" size={13} color="#fff" /><Text style={styles.actionBtnText}>Check Out</Text></>}
@@ -364,8 +435,8 @@ function MessAttendanceView({ theme }: { theme: any }) {
   const { data: students = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ["attendance", today],
     queryFn: () => request("/attendance"),
-    refetchInterval: 15000,
-    staleTime: 5000,
+    refetchInterval: 8000,
+    staleTime: 4000,
   });
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
@@ -376,6 +447,7 @@ function MessAttendanceView({ theme }: { theme: any }) {
     try {
       await request(`/attendance/mess-card/${studentId}`, { method: "PATCH", body: JSON.stringify({ messCard: !current }) });
       qc.invalidateQueries({ queryKey: ["attendance"] });
+      qc.invalidateQueries({ queryKey: ["mess-stats"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) { Alert.alert("Error", e.message || "Failed to update"); }
     setTogglingId(null);
@@ -463,21 +535,29 @@ function MessAttendanceView({ theme }: { theme: any }) {
                     </Text>
                   ) : null}
                 </View>
+                {/* Allow give AND revoke for all volunteer+ roles */}
                 <Pressable
-                  onPress={() => !given && toggleMessCard(item.id, given)}
-                  disabled={isToggling || given}
+                  onPress={() => !isToggling && toggleMessCard(item.id, given)}
+                  disabled={isToggling}
                   style={[styles.messCardBtn, {
-                    backgroundColor: given ? "#22c55e" : theme.background,
-                    borderColor: given ? "#22c55e" : theme.border,
-                  }]}>
-                  {isToggling
-                    ? <ActivityIndicator size="small" color={given ? "#fff" : theme.tint} />
-                    : <>
-                        <Feather name={given ? "lock" : "circle"} size={15} color={given ? "#fff" : theme.textSecondary} />
-                        <Text style={[styles.messCardBtnText, { color: given ? "#fff" : theme.textSecondary }]}>
-                          {given ? "Card Given" : "Give Card"}
-                        </Text>
-                      </>}
+                    backgroundColor: given ? "#ef444415" : "#22c55e",
+                    borderColor: given ? "#ef444440" : "#22c55e",
+                    borderWidth: given ? 1 : 0,
+                  }]}
+                >
+                  {isToggling ? (
+                    <ActivityIndicator size="small" color={given ? "#ef4444" : "#fff"} />
+                  ) : given ? (
+                    <>
+                      <Feather name="x-circle" size={14} color="#ef4444" />
+                      <Text style={[styles.messCardBtnText, { color: "#ef4444" }]}>Revoke</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="check" size={14} color="#fff" />
+                      <Text style={[styles.messCardBtnText, { color: "#fff" }]}>Give Card</Text>
+                    </>
+                  )}
                 </Pressable>
               </View>
             );
@@ -488,166 +568,149 @@ function MessAttendanceView({ theme }: { theme: any }) {
   );
 }
 
-// ─── ATTENDANCE SCREEN ─────────────────────────────────────────────────────────
+// ─── Helper Components ─────────────────────────────────────────────────────────
 
-const TAB_CONFIG = [
-  { key: "room", icon: "home",   label: "Room", color: "#6366f1" },
-  { key: "mess", icon: "coffee", label: "Mess", color: "#22c55e" },
-] as const;
-type AttTab = "room" | "mess";
-
-function AttendanceScreen({ theme, topPad }: { theme: any; topPad: number }) {
-  const request = useApiRequest();
-  const qc = useQueryClient();
-  const [showNotifModal, setShowNotifModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<AttTab>("room");
-
-  const pageTitles: Record<AttTab, string> = { room: "Room Attendance", mess: "Mess Cards" };
-
+function StatPill({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.pageTitle, { color: theme.text }]}>{pageTitles[activeTab]}</Text>
-            <Text style={[styles.pageDate, { color: theme.textSecondary }]}>{new Date().toDateString()}</Text>
-          </View>
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            {TAB_CONFIG.map(tab => {
-              const active = activeTab === tab.key;
-              return (
-                <Pressable key={tab.key}
-                  onPress={() => { setActiveTab(tab.key as AttTab); Haptics.selectionAsync(); }}
-                  style={[styles.tabBtn, { backgroundColor: active ? tab.color + "20" : theme.surface, borderColor: active ? tab.color : theme.border }]}>
-                  <Feather name={tab.icon as any} size={13} color={active ? tab.color : theme.textSecondary} />
-                  <Text style={[styles.tabBtnText, { color: active ? tab.color : theme.textSecondary }]}>{tab.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-
-      {activeTab === "room" ? <RoomAttendanceView theme={theme} /> : <MessAttendanceView theme={theme} />}
-
-      <NotificationModal visible={showNotifModal} onClose={() => setShowNotifModal(false)} theme={theme} request={request} qc={qc} />
-      <NotificationFAB theme={theme} onNewNotification={() => setShowNotifModal(true)} />
+    <View style={[styles.statPill, { backgroundColor: theme.surface }]}>
+      <Text style={[styles.statPillVal, { color }]}>{value ?? 0}</Text>
+      <Text style={[styles.statPillLabel, { color: theme.textSecondary }]}>{label}</Text>
     </View>
   );
 }
 
-// ─── ROOT ──────────────────────────────────────────────────────────────────────
+// ─── MAIN SCREEN ───────────────────────────────────────────────────────────────
 
-export default function AttendanceTab() {
+export default function AttendanceScreen() {
   const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
+  const isDark = colorScheme === "dark";
+  const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
+  const request = useApiRequest();
+  const qc = useQueryClient();
 
-  return <AttendanceScreen theme={theme} topPad={topPad} />;
-}
+  const [tab, setTab] = useState<"room" | "mess">("room");
+  const [showNotifModal, setShowNotifModal] = useState(false);
 
-function StatPill({ label, value, color, theme }: { label: string; value: number; color: string; theme: any }) {
   return (
-    <View style={[styles.statPill, { backgroundColor: color + "15", borderColor: color + "40" }]}>
-      <Text style={[styles.statPillVal, { color }]}>{value}</Text>
-      <Text style={[styles.statPillLabel, { color: theme.textSecondary }]}>{label}</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Page Header */}
+      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={[styles.pageTitle, { color: theme.text }]}>Attendance</Text>
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowNotifModal(true); }}
+            style={[styles.notifBtn, { backgroundColor: "#f59e0b20", borderColor: "#f59e0b40" }]}
+          >
+            <Feather name="bell" size={16} color="#f59e0b" />
+            <Text style={[styles.notifBtnText, { color: "#f59e0b" }]}>Notify</Text>
+          </Pressable>
+        </View>
+
+        {/* Tab Switcher */}
+        <View style={[styles.tabBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Pressable
+            onPress={() => setTab("room")}
+            style={[styles.tabBtn, tab === "room" && { backgroundColor: theme.tint }]}
+          >
+            <Feather name="home" size={14} color={tab === "room" ? "#fff" : theme.textSecondary} />
+            <Text style={[styles.tabBtnText, { color: tab === "room" ? "#fff" : theme.textSecondary }]}>Room / Inventory</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setTab("mess")}
+            style={[styles.tabBtn, tab === "mess" && { backgroundColor: "#22c55e" }]}
+          >
+            <Feather name="coffee" size={14} color={tab === "mess" ? "#fff" : theme.textSecondary} />
+            <Text style={[styles.tabBtnText, { color: tab === "mess" ? "#fff" : theme.textSecondary }]}>Mess Card</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {tab === "room" ? (
+        <RoomAttendanceView theme={theme} />
+      ) : (
+        <MessAttendanceView theme={theme} />
+      )}
+
+      <NotificationModal
+        visible={showNotifModal}
+        onClose={() => setShowNotifModal(false)}
+        theme={theme}
+        request={request}
+        qc={qc}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  pageHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 4 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  pageTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  pageDate: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  tabBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  tabBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-
-  // Stats strip
-  statsStripRow: { flexDirection: "row", gap: 6, padding: 10, borderBottomWidth: 1, flexWrap: "wrap" },
-  statPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 18, borderWidth: 1 },
-  statPillVal: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  statPillLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-
-  // Search bar
-  searchBarWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
-  searchBarInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", paddingVertical: 4 },
-
-  // Attendance card
-  attCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  pageHeader: { paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1, gap: 10 },
+  pageTitle: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  notifBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
+  notifBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  tabBar: { flexDirection: "row", borderRadius: 12, borderWidth: 1, padding: 4, gap: 4 },
+  tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 9 },
+  tabBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  statsStripRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 10, gap: 8, borderBottomWidth: 1 },
+  statPill: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, gap: 2 },
+  statPillVal: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  statPillLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  searchBarWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1 },
+  searchBarInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+  // Student attendance card
+  attCard: { borderRadius: 14, borderWidth: 1.5, overflow: "hidden" },
   attTopRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  avatarText: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  studentMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
-
-  // Status pill (inline badge next to name)
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
+  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  studentName: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  studentMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusPillText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-
-  // Action rows (check in / check out)
-  actionRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: 1 },
-  actionIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  actionNone: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
-  actionBtnText: { fontSize: 12, fontFamily: "Inter_700Bold", color: "#fff" },
-  timeStampBadge: { gap: 1 },
-  timeStampLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  statusPillText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  // Remark badges
+  remarkBadges: { alignItems: "flex-end", gap: 4 },
+  remarkGreen: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#dcfce7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  remarkGreenText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#16a34a" },
+  remarkRed: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#fee2e2", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  remarkRedText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#dc2626" },
+  // Action rows
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1 },
+  actionIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  timeStampBadge: { flexDirection: "row", gap: 8, alignItems: "center", flex: 1 },
+  timeStampLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   timeStampValue: { fontSize: 13, fontFamily: "Inter_700Bold" },
-
+  actionNone: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  actionBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
   // Inventory section
-  invSection: { paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, gap: 8 },
-  invSectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 },
-  invChipsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  invChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  invChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-
-  // Mess card row
-  messCardRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
-  messCardBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5 },
-  messCardBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-
-  // Lost & Found
-  lostCard: { flexDirection: "row", gap: 12, alignItems: "flex-start", borderRadius: 14, borderWidth: 1, padding: 14 },
-  lostItemRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  lostIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" },
-  metaChip: { flexDirection: "row", alignItems: "center", gap: 3 },
-  metaChipText: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  statusBadge: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, alignSelf: "flex-start" },
-  statusBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  reportBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
-  reportBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-
+  invSection: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, gap: 8 },
+  invSectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  invChipsRow: { flexDirection: "row", gap: 8 },
+  invChip: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1 },
+  invChipText: { fontSize: 11, fontFamily: "Inter_600SemiBold", flex: 1 },
+  submitInvBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, paddingVertical: 10 },
+  submitInvBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
+  // Mess card
+  messCardRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1.5 },
+  messCardBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  messCardBtnText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   // Empty state
-  emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 10 },
-  emptyText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  emptySubtext: { fontSize: 12, fontFamily: "Inter_400Regular" },
-
-  // Modals
-  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "#00000060" },
-  modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12 },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
-  modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  modalSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: -6 },
-  input: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, fontFamily: "Inter_400Regular" },
-  textArea: { minHeight: 80, textAlignVertical: "top" },
+  emptyState: { alignItems: "center", paddingTop: 80, gap: 12 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  // Notification modal
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "#00000055" },
+  modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40, gap: 12 },
+  modalHandle: { width: 40, height: 4, backgroundColor: "#ccc", borderRadius: 2, alignSelf: "center", marginBottom: 8 },
+  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  modalSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: "Inter_400Regular" },
+  textArea: { height: 80, textAlignVertical: "top" },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
-  cancelBtn: { flex: 1, borderWidth: 1, borderRadius: 10, alignItems: "center", paddingVertical: 12 },
-  cancelBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  submitBtn: { flex: 1, borderRadius: 10, alignItems: "center", paddingVertical: 12 },
-  submitBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
-
-  // FAB
-  fabContainer: { position: "absolute", bottom: 100, right: 20, alignItems: "flex-end", gap: 10 },
-  fabBackdrop: { position: "absolute", top: -1000, left: -1000, right: -1000, bottom: -1000 },
-  fabMenu: { gap: 8, alignItems: "flex-end" },
-  fabMenuItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
-  fabMenuIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  fabMenuLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  fab: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  cancelBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 14, alignItems: "center" },
+  cancelBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  submitBtn: { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  submitBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
