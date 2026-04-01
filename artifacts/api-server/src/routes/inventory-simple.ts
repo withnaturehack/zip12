@@ -55,7 +55,7 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     inventory: invMap[s.id] || {
       mattress: false, bedsheet: false, pillow: false,
       mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
-      inventoryLocked: false,
+      messCard: false, inventoryLocked: false,
     },
   })));
 });
@@ -191,6 +191,41 @@ router.post("/:studentId/submit", requireVolunteer, async (req: AuthRequest, res
   }).where(eq(studentInventoryTable.id, existing.id)).returning();
 
   res.json(record);
+});
+
+// PATCH /api/inventory-simple/:studentId/mess-card — toggle mess card
+router.patch("/:studentId/mess-card", requireVolunteer, async (req: AuthRequest, res) => {
+  const { studentId } = req.params;
+  const { messCard } = req.body;
+
+  const [student] = await db.select().from(usersTable).where(eq(usersTable.id, studentId));
+  if (!student) { res.status(404).json({ message: "Student not found" }); return; }
+
+  const [existing] = await db.select().from(studentInventoryTable)
+    .where(eq(studentInventoryTable.studentId, studentId));
+
+  const newValue = messCard !== undefined ? !!messCard : !(existing?.messCard ?? false);
+
+  let record;
+  if (existing) {
+    [record] = await db.update(studentInventoryTable)
+      .set({ messCard: newValue, updatedBy: req.userId!, updatedAt: new Date() })
+      .where(eq(studentInventoryTable.id, existing.id))
+      .returning();
+  } else {
+    [record] = await db.insert(studentInventoryTable).values({
+      id: generateId(),
+      studentId,
+      hostelId: student.hostelId || null,
+      mattress: false, bedsheet: false, pillow: false,
+      mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
+      messCard: newValue,
+      inventoryLocked: false,
+      updatedBy: req.userId!,
+    }).returning();
+  }
+
+  res.json({ ...record, messCard: newValue });
 });
 
 // GET /api/inventory-simple/student/:studentId — single student inventory

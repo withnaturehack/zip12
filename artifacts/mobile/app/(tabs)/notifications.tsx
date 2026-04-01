@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
@@ -200,7 +201,7 @@ function StaffAnnouncements({ theme, user }: { theme: any; user: any }) {
           <Feather name="volume-x" size={48} color={theme.textTertiary} />
           <Text style={[styles.emptyTitle, { color: theme.text }]}>No announcements yet</Text>
           <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-            Use the Lost & Found screen's + button to send a notification to students.
+            Tap the + button below to send a notification to students.
           </Text>
         </View>
       ) : (
@@ -245,7 +246,7 @@ export default function NotificationsScreen() {
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, isCoordinator } = useAuth();
   const isWeb = Platform.OS === "web";
 
   const isStudent = user?.role === "student";
@@ -262,6 +263,16 @@ export default function NotificationsScreen() {
         ? <StudentNotifications theme={theme} user={user} />
         : <StaffAnnouncements theme={theme} user={user} />
       }
+
+      {/* FAB — staff can post announcements from here */}
+      {isCoordinator && (
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/admin/post-announcement"); }}
+          style={[styles.fab, { backgroundColor: theme.tint, bottom: (isWeb ? 16 : insets.bottom) + 84 }]}
+        >
+          <Feather name="plus" size={22} color="#fff" />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -289,4 +300,5 @@ const styles = StyleSheet.create({
   infoBannerText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
   catChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   catChipText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  fab: { position: "absolute", right: 20, width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 5 },
 });

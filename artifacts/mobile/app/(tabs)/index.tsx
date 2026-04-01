@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   RefreshControl, Platform, useColorScheme, ActivityIndicator,
@@ -13,6 +13,66 @@ import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { Badge } from "@/components/ui/Badge";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
+import { MessCardModal } from "@/components/MessCardModal";
+
+function StatBox({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
+  return (
+    <View style={styles.statBox}>
+      <Text style={[styles.statVal, { color }]}>{value ?? "—"}</Text>
+      <Text style={[styles.statLabel, { color: theme.textTertiary }]}>{label}</Text>
+    </View>
+  );
+}
+
+function QuickCard({ label, icon, color, onPress, badge }: {
+  label: string; icon: string; color: string; onPress: () => void; badge?: number;
+}) {
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
+  return (
+    <Pressable
+      onPress={() => { Haptics.selectionAsync(); onPress(); }}
+      style={({ pressed }) => [styles.quickCard, { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }]}
+    >
+      <View style={[styles.quickIcon, { backgroundColor: color + "1A" }]}>
+        <Feather name={icon as any} size={21} color={color} />
+      </View>
+      <Text style={[styles.quickLabel, { color: theme.text }]} numberOfLines={1}>{label}</Text>
+      {!!badge && badge > 0 && (
+        <View style={styles.quickBadge}>
+          <Text style={styles.quickBadgeText}>{badge > 9 ? "9+" : badge}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function SectionCard({ icon, iconColor, title, sub, children, onViewAll }: {
+  icon: string; iconColor: string; title: string; sub?: string;
+  children: React.ReactNode; onViewAll?: () => void;
+}) {
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
+  return (
+    <AnimatedCard style={[styles.card, { borderColor: iconColor + "28", borderWidth: 1.5 }]}>
+      <View style={styles.cardHeader}>
+        <View style={[styles.cardIconBox, { backgroundColor: iconColor + "1A" }]}>
+          <Feather name={icon as any} size={17} color={iconColor} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
+          {sub && <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{sub}</Text>}
+        </View>
+        {onViewAll && (
+          <Pressable onPress={onViewAll} style={styles.viewAllBtn} hitSlop={8}>
+            <Feather name="arrow-right" size={15} color={theme.textTertiary} />
+          </Pressable>
+        )}
+      </View>
+      {children}
+    </AnimatedCard>
+  );
+}
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -23,12 +83,11 @@ export default function HomeScreen() {
   const request = useApiRequest();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
-  const topPad = (isWeb ? 67 : insets.top) + 8;
+  const topPad = (isWeb ? 67 : insets.top) + 12;
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [messCardOpen, setMessCardOpen] = useState(false);
 
-  const [refreshing, setRefreshing] = React.useState(false);
-
-  // Parse assigned hostel IDs for admin/coordinator
   const isAdmin = user?.role === "admin" || user?.role === "coordinator";
   const assignedHostelIds: string[] = React.useMemo(() => {
     try {
@@ -51,13 +110,6 @@ export default function HomeScreen() {
     enabled: isVolunteer,
     refetchInterval: isCoordinator ? 5000 : 20000,
     staleTime: isCoordinator ? 3000 : 10000,
-  });
-
-  const { data: hostel } = useQuery({
-    queryKey: ["hostel", user?.hostelId],
-    queryFn: () => request(`/hostels/${user?.hostelId}`),
-    enabled: !!user?.hostelId && isStudent,
-    staleTime: 60000,
   });
 
   const { data: reportSummary } = useQuery({
@@ -92,7 +144,14 @@ export default function HomeScreen() {
     staleTime: 30000,
   });
 
-  // Fetch all hostels to cross-reference assigned hostel IDs
+  const { data: pendingCount } = useQuery<{ count: number }>({
+    queryKey: ["pending-count"],
+    queryFn: () => request("/approvals/count"),
+    enabled: isSuperAdmin,
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+
   const { data: allHostels = [] } = useQuery<any[]>({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
@@ -105,7 +164,6 @@ export default function HomeScreen() {
     return (allHostels as any[]).filter((h: any) => assignedHostelIds.includes(h.id));
   }, [allHostels, assignedHostelIds]);
 
-  // Fetch inventory stats for assigned hostels (admin dashboard)
   const { data: invStats } = useQuery<any>({
     queryKey: ["inv-stats"],
     queryFn: () => request("/inventory-simple"),
@@ -129,7 +187,6 @@ export default function HomeScreen() {
     },
   });
 
-  // Heartbeat to keep active status alive every 5 minutes
   useEffect(() => {
     if (!isVolunteer || !myStatus?.isActive) {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
@@ -143,9 +200,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchAnn(), refetchStats(), refetchStatus(), refetchMess()].filter(Boolean));
+    await Promise.all([refetchAnn(), refetchStats?.(), refetchStatus?.(), refetchMess?.()].filter(Boolean));
     setRefreshing(false);
-  }, [refetchAnn, refetchStats, refetchStatus]);
+  }, [refetchAnn, refetchStats, refetchStatus, refetchMess]);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -165,379 +222,398 @@ export default function HomeScreen() {
     : "green";
 
   const isActive = myStatus?.isActive ?? false;
+  const pendingNum = pendingCount?.count ?? 0;
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      contentContainerStyle={{ paddingTop: topPad, paddingBottom: isWeb ? 34 : 100 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.greeting, { color: theme.textSecondary }]}>{greeting()},</Text>
-          <Text style={[styles.userName, { color: theme.text }]}>{user?.name?.split(" ")[0] ?? "..."}</Text>
-        </View>
-        <Badge label={roleLabel} variant={roleBadge as any} />
-      </View>
-
-      {/* STAFF STATUS BANNER (volunteers/staff only) */}
-      {isVolunteer && (
-        <View
-          style={[
-            styles.statusBanner,
-            { backgroundColor: isActive ? "#22c55e15" : "#f59e0b15", borderColor: isActive ? "#22c55e50" : "#f59e0b50" },
-          ]}
-        >
-          <View style={[styles.statusDot, { backgroundColor: isActive ? "#22c55e" : "#f59e0b" }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.statusText, { color: isActive ? "#22c55e" : "#f59e0b" }]}>
-              {isActive ? "You are Active" : "You are Inactive"}
-            </Text>
-            <Text style={[styles.statusSub, { color: theme.textSecondary }]}>
-              {isActive ? "Auto-inactive after 10 min of inactivity" : "Go active to start your shift"}
+    <>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.background }]}
+        contentContainerStyle={{ paddingTop: topPad, paddingBottom: isWeb ? 34 : 108 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Hero Header ───────────────────────────────────────────── */}
+        <View style={[styles.hero, { paddingHorizontal: 20 }]}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.greeting, { color: theme.textSecondary }]}>{greeting()}</Text>
+            <Text style={[styles.heroName, { color: theme.text }]} numberOfLines={1}>
+              {user?.name?.split(" ")[0] ?? "..."}
             </Text>
           </View>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              activeStatusMutation.mutate({ goActive: !isActive, remark: isActive ? "Going inactive" : "Going active" });
-            }}
-            disabled={activeStatusMutation.isPending}
-            style={[styles.statusToggleBtn, { backgroundColor: isActive ? "#ef444420" : "#22c55e20", borderColor: isActive ? "#ef444440" : "#22c55e40" }]}
-          >
-            {activeStatusMutation.isPending ? (
-              <ActivityIndicator size="small" color={isActive ? "#ef4444" : "#22c55e"} />
-            ) : (
-              <Text style={[styles.statusToggleTxt, { color: isActive ? "#ef4444" : "#22c55e" }]}>
-                {isActive ? "Go Inactive" : "Go Active"}
-              </Text>
-            )}
-          </Pressable>
+          <Badge label={roleLabel} variant={roleBadge as any} />
         </View>
-      )}
 
-      {/* VOLUNTEER (non-coordinator) DASHBOARD */}
-      {!isCoordinator && (
-        <>
-          <AnimatedCard style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconBox, { backgroundColor: "#22c55e20" }]}>
-                <Feather name="check-circle" size={20} color="#22c55e" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>Today's Attendance</Text>
-                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{new Date().toDateString()}</Text>
-              </View>
+        {/* ── Staff Status Banner ───────────────────────────────────── */}
+        {isVolunteer && (
+          <View style={[styles.statusBanner, {
+            backgroundColor: isActive ? "#22c55e10" : "#f59e0b10",
+            borderColor: isActive ? "#22c55e40" : "#f59e0b40",
+          }]}>
+            <View style={[styles.statusDot, { backgroundColor: isActive ? "#22c55e" : "#f59e0b" }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.statusText, { color: isActive ? "#22c55e" : "#f59e0b" }]}>
+                {isActive ? "Shift Active" : "Shift Inactive"}
+              </Text>
+              <Text style={[styles.statusSub, { color: theme.textSecondary }]}>
+                {isActive ? "Auto-inactive after 10 min of no activity" : "Tap Go Active to start your shift"}
+              </Text>
             </View>
-            {attStats ? (
-              <View style={styles.statsRow}>
-                <StatBox label="Total" value={attStats.total} color={theme.text} theme={theme} />
-                <StatBox label="Entered" value={attStats.entered} color="#22c55e" theme={theme} />
-                <StatBox label="Pending" value={attStats.notEntered} color="#f59e0b" theme={theme} />
-              </View>
-            ) : (
-              <CardSkeleton />
-            )}
             <Pressable
-              onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/lostandfound"); }}
-              style={[styles.actionBtn, { backgroundColor: theme.tint }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                activeStatusMutation.mutate({ goActive: !isActive });
+              }}
+              disabled={activeStatusMutation.isPending}
+              style={[styles.shiftBtn, {
+                backgroundColor: isActive ? "#ef444415" : "#22c55e15",
+                borderColor: isActive ? "#ef444440" : "#22c55e40",
+              }]}
             >
-              <Feather name="check-square" size={16} color="#fff" />
-              <Text style={styles.actionBtnText}>Mark Attendance + Inventory</Text>
+              {activeStatusMutation.isPending
+                ? <ActivityIndicator size="small" color={isActive ? "#ef4444" : "#22c55e"} />
+                : <Text style={[styles.shiftBtnText, { color: isActive ? "#ef4444" : "#22c55e" }]}>
+                    {isActive ? "Deactivate" : "Go Active"}
+                  </Text>
+              }
             </Pressable>
-          </AnimatedCard>
-
-          <View style={styles.quickGrid}>
-            {[
-              { label: "Search", icon: "search", path: "/admin/search", color: theme.tint },
-              { label: "Inventory", icon: "package", path: "/admin/inventory-table", color: "#f59e0b" },
-              { label: "Mess Cards", icon: "coffee", path: "/(tabs)/lostandfound", color: "#22c55e" },
-            ].map(({ label, icon, path, color }) => (
-              <Pressable
-                key={label}
-                onPress={() => { Haptics.selectionAsync(); router.push(path as any); }}
-                style={[styles.quickCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: color + "18" }]}>
-                  <Feather name={icon as any} size={22} color={color} />
-                </View>
-                <Text style={[styles.quickLabel, { color: theme.text }]}>{label}</Text>
-              </Pressable>
-            ))}
           </View>
-        </>
-      )}
+        )}
 
-      {/* COORDINATOR / ADMIN / SUPERADMIN DASHBOARD */}
-      {isCoordinator && (
-        <>
-          {/* ── Assigned Hostel Highlights (admin/coordinator only, not superadmin) ── */}
-          {isAdmin && assignedHostels.length > 0 && (
-            <>
-              <Text style={[styles.sectionLabel, { color: theme.text, paddingHorizontal: 20, marginBottom: 8 }]}>
-                Your Assigned Hostels
-              </Text>
-              {assignedHostels.map((h: any) => (
-                <Pressable
-                  key={h.id}
-                  onPress={() => { Haptics.selectionAsync(); router.push("/admin/hostels" as any); }}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-                >
-                  <AnimatedCard style={[styles.card, styles.assignedHostelCard]}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                      <View style={[styles.hostelIconBox, { backgroundColor: theme.tint + "20" }]}>
-                        <Feather name="home" size={22} color={theme.tint} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <Text style={[styles.hostelHighlightName, { color: theme.text }]}>{h.name}</Text>
-                          <View style={[styles.assignedBadge, { backgroundColor: theme.tint + "20", borderColor: theme.tint + "50" }]}>
-                            <Text style={[styles.assignedBadgeText, { color: theme.tint }]}>Assigned</Text>
-                          </View>
-                        </View>
-                        {h.location ? <Text style={[styles.hostelHighlightLoc, { color: theme.textSecondary }]}>{h.location}</Text> : null}
-                        <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
-                          {h.wardenName ? (
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                              <Feather name="user" size={11} color={theme.textTertiary} />
-                              <Text style={[styles.hostelHighlightMeta, { color: theme.textTertiary }]}>{h.wardenName}</Text>
-                            </View>
-                          ) : null}
-                          {h.totalRooms ? (
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                              <Feather name="layers" size={11} color={theme.textTertiary} />
-                              <Text style={[styles.hostelHighlightMeta, { color: theme.textTertiary }]}>{h.totalRooms} rooms</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                      </View>
-                      <Feather name="chevron-right" size={18} color={theme.textTertiary} />
-                    </View>
-                  </AnimatedCard>
-                </Pressable>
-              ))}
-            </>
-          )}
-
-          {reportSummary && (
-            <AnimatedCard style={styles.card}>
-              <Text style={[styles.sectionLabel, { color: theme.text }]}>System Overview</Text>
-              <View style={styles.statsRow}>
-                <StatBox label="Students" value={reportSummary.totalStudents} color={theme.tint} theme={theme} />
-                <StatBox label="Hostels" value={reportSummary.totalHostels} color="#22c55e" theme={theme} />
-                <StatBox label="Announcements" value={reportSummary.totalAnnouncements} color="#8b5cf6" theme={theme} />
-              </View>
-            </AnimatedCard>
-          )}
-
-          {attStats && (
-            <AnimatedCard style={styles.card}>
-              <Text style={[styles.sectionLabel, { color: theme.text }]}>Today's Room Attendance</Text>
-              <View style={styles.statsRow}>
-                <StatBox label="Total" value={attStats.total} color={theme.text} theme={theme} />
-                <StatBox label="Entered" value={attStats.entered} color="#22c55e" theme={theme} />
-                <StatBox label="Pending" value={attStats.notEntered} color="#f59e0b" theme={theme} />
-              </View>
-            </AnimatedCard>
-          )}
-
-          {/* Check-in Stats */}
-          <AnimatedCard style={[styles.card, { borderColor: "#8b5cf630", borderWidth: 1.5 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#8b5cf620", alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="log-in" size={16} color="#8b5cf6" />
+        {/* ══════════════════════════════════════════════════════════════
+             VOLUNTEER (non-coordinator) view
+            ══════════════════════════════════════════════════════════════ */}
+        {isVolunteer && !isCoordinator && (
+          <>
+            {/* Attendance card */}
+            <SectionCard
+              icon="check-square"
+              iconColor="#22c55e"
+              title="Today's Attendance"
+              sub={new Date().toDateString()}
+              onViewAll={() => router.push("/(tabs)/lostandfound")}
+            >
+              {attStats ? (
+                <View style={styles.statsRow}>
+                  <StatBox label="Total" value={attStats.total} color={theme.text} theme={theme} />
+                  <StatBox label="In Campus" value={attStats.entered} color="#22c55e" theme={theme} />
+                  <StatBox label="Out" value={attStats.notEntered} color="#f59e0b" theme={theme} />
                 </View>
-                <View>
-                  <Text style={[styles.sectionLabel, { color: theme.text, marginBottom: 0 }]}>Campus Check-ins</Text>
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary }}>Live · Today</Text>
-                </View>
-              </View>
-              <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/lostandfound" as any); }} style={{ padding: 4 }}>
-                <Feather name="arrow-right" size={16} color={theme.textTertiary} />
+              ) : <CardSkeleton />}
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/lostandfound"); }}
+                style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
+              >
+                <Feather name="check-square" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Mark Attendance & Inventory</Text>
               </Pressable>
-            </View>
-            <View style={styles.statsRow}>
-              <StatBox label="Checked In" value={checkinStats?.total ?? 0} color="#8b5cf6" theme={theme} />
-              <StatBox label="Checked Out" value={checkinStats?.checkedOut ?? 0} color="#6366f1" theme={theme} />
-              <StatBox label="Still Inside" value={(checkinStats?.total ?? 0) - (checkinStats?.checkedOut ?? 0)} color="#22c55e" theme={theme} />
-            </View>
-          </AnimatedCard>
+            </SectionCard>
 
-          {/* Inventory Stats */}
-          <AnimatedCard style={[styles.card, { borderColor: "#06b6d430", borderWidth: 1.5 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#06b6d420", alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="package" size={16} color="#06b6d4" />
-                </View>
-                <View>
-                  <Text style={[styles.sectionLabel, { color: theme.text, marginBottom: 0 }]}>Inventory Status</Text>
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary }}>Live · All Hostels</Text>
-                </View>
+            {/* Mess Cards card */}
+            <SectionCard
+              icon="credit-card"
+              iconColor="#f59e0b"
+              title="Mess Cards"
+              sub="Tap to distribute cards"
+            >
+              <View style={styles.statsRow}>
+                <StatBox label="Given" value={messStats?.cardGivenCount ?? 0} color="#22c55e" theme={theme} />
+                <StatBox label="Pending" value={(attStats?.total ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
+                <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
               </View>
-              <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/admin/inventory-table" as any); }} style={{ padding: 4 }}>
-                <Feather name="arrow-right" size={16} color={theme.textTertiary} />
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); setMessCardOpen(true); }}
+                style={[styles.actionBtn, { backgroundColor: "#f59e0b" }]}
+              >
+                <Feather name="credit-card" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Distribute Mess Cards</Text>
               </Pressable>
+            </SectionCard>
+
+            {/* Quick grid */}
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 10 }]}>
+              Quick Access
+            </Text>
+            <View style={styles.quickGrid}>
+              <QuickCard label="Search" icon="search" color={theme.tint} onPress={() => router.push("/admin/search")} />
+              <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => router.push("/(tabs)/lostandfound")} />
+              <QuickCard label="Inventory" icon="package" color="#f59e0b" onPress={() => router.push("/admin/inventory-table")} />
+              <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => setMessCardOpen(true)} />
             </View>
-            <View style={styles.statsRow}>
-              <StatBox label="Total" value={invTotal} color={theme.text} theme={theme} />
-              <StatBox label="Submitted" value={invSubmitted} color="#06b6d4" theme={theme} />
-              <StatBox label="Pending" value={invTotal - invSubmitted} color="#f59e0b" theme={theme} />
-            </View>
-            {invTotal > 0 && invTotal - invSubmitted > 0 && (
-              <View style={[styles.missingAlert, { backgroundColor: "#fef3c715", borderColor: "#f59e0b40" }]}>
-                <Feather name="alert-triangle" size={13} color="#f59e0b" />
-                <Text style={[styles.missingAlertText, { color: "#f59e0b" }]}>
-                  {invTotal - invSubmitted} students have pending inventory
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+             COORDINATOR / ADMIN / SUPERADMIN view
+            ══════════════════════════════════════════════════════════════ */}
+        {isCoordinator && (
+          <>
+            {/* Assigned Hostels */}
+            {isAdmin && assignedHostels.length > 0 && (
+              <View style={{ marginBottom: 4 }}>
+                <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 8 }]}>
+                  Your Hostels
                 </Text>
+                {assignedHostels.map((h: any) => (
+                  <Pressable
+                    key={h.id}
+                    onPress={() => { Haptics.selectionAsync(); router.push("/admin/hostels" as any); }}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+                  >
+                    <AnimatedCard style={[styles.card, { borderColor: theme.tint + "30", borderWidth: 1.5 }]}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                        <View style={[styles.cardIconBox, { backgroundColor: theme.tint + "1A" }]}>
+                          <Feather name="home" size={17} color={theme.tint} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.cardTitle, { color: theme.text }]}>{h.name}</Text>
+                          {h.location && <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{h.location}</Text>}
+                        </View>
+                        <View style={[styles.assignedPill, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
+                          <Text style={[styles.assignedPillText, { color: theme.tint }]}>Assigned</Text>
+                        </View>
+                        <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+                      </View>
+                    </AnimatedCard>
+                  </Pressable>
+                ))}
               </View>
             )}
-          </AnimatedCard>
 
-          {/* Mess Card Stats */}
-          <AnimatedCard style={[styles.card, { borderColor: "#22c55e30", borderWidth: 1.5 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#22c55e20", alignItems: "center", justifyContent: "center" }}>
-                  <Feather name="coffee" size={16} color="#22c55e" />
-                </View>
-                <View>
-                  <Text style={[styles.sectionLabel, { color: theme.text, marginBottom: 0 }]}>Mess Cards</Text>
-                  <Text style={[{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary }]}>Live · Today</Text>
-                </View>
-              </View>
-              <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/lostandfound" as any); }} style={{ padding: 4 }}>
-                <Feather name="arrow-right" size={16} color={theme.textTertiary} />
-              </Pressable>
-            </View>
-            <View style={styles.statsRow}>
-              <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
-              <StatBox label="Card Given" value={messStats?.cardGivenCount ?? 0} color="#22c55e" theme={theme} />
-              <StatBox label="Pending" value={(attStats?.total ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
-            </View>
-          </AnimatedCard>
-
-          <View style={styles.quickGrid}>
-            {[
-              { label: "Students", icon: "users", path: "/(tabs)/hostel", color: theme.tint },
-              { label: "Attendance", icon: "check-square", path: "/(tabs)/lostandfound", color: "#22c55e" },
-              { label: "Inventory", icon: "package", path: "/admin/inventory-table", color: "#f59e0b" },
-              { label: "Search", icon: "search", path: "/admin/search", color: "#3b82f6" },
-              { label: "Staff Status", icon: "activity", path: "/admin/staff-status", color: "#22c55e" },
-              { label: "Hostels", icon: "home", path: "/admin/hostels", color: "#8b5cf6" },
-              { label: "Post Alert", icon: "volume-2", path: "/admin/post-announcement", color: "#f59e0b" },
-              ...(isSuperAdmin
-                ? [
-                    { label: "Activity Logs", icon: "clock", path: "/admin/activity-logs", color: "#06b6d4" },
-                    { label: "CSV Import", icon: "upload-cloud", path: "/admin/csv-import", color: "#f59e0b" },
-                    { label: "Reports", icon: "download", path: "/admin/reports", color: "#ef4444" },
-                    { label: "Master Table", icon: "database", path: "/admin/master-table", color: "#6366f1" },
-                    { label: "Users", icon: "user-plus", path: "/admin/manage-admins", color: "#f59e0b" },
-                  ]
-                : []),
-            ].map(({ label, icon, path, color }) => (
+            {/* Superadmin pending approvals alert */}
+            {isSuperAdmin && pendingNum > 0 && (
               <Pressable
-                key={label}
-                onPress={() => { Haptics.selectionAsync(); router.push(path as any); }}
-                style={[styles.quickCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/admin/approvals"); }}
+                style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, marginHorizontal: 20, marginBottom: 12 })}
               >
-                <View style={[styles.quickIcon, { backgroundColor: color + "18" }]}>
-                  <Feather name={icon as any} size={22} color={color} />
+                <View style={[styles.pendingAlert, { backgroundColor: "#ef444412", borderColor: "#ef444440" }]}>
+                  <View style={[styles.pendingAlertIcon, { backgroundColor: "#ef444420" }]}>
+                    <Feather name="user-check" size={16} color="#ef4444" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.pendingAlertTitle, { color: "#ef4444" }]}>
+                      {pendingNum} Pending Approval{pendingNum > 1 ? "s" : ""}
+                    </Text>
+                    <Text style={[styles.pendingAlertSub, { color: theme.textSecondary }]}>
+                      Tap to review and approve new registrations
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={15} color="#ef4444" />
                 </View>
-                <Text style={[styles.quickLabel, { color: theme.text }]}>{label}</Text>
               </Pressable>
-            ))}
-          </View>
-        </>
-      )}
+            )}
 
-      {/* ANNOUNCEMENTS (all roles) */}
-      <Text style={[styles.sectionLabel, { color: theme.text, paddingHorizontal: 20, marginBottom: 10, marginTop: 8 }]}>
-        Announcements
-      </Text>
-      {annLoading ? (
-        <View style={{ paddingHorizontal: 20 }}><CardSkeleton /><CardSkeleton /></View>
-      ) : !announcements?.length ? (
-        <AnimatedCard style={styles.card}>
-          <View style={styles.emptyState}>
-            <Feather name="bell-off" size={32} color={theme.textTertiary} />
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No announcements</Text>
-          </View>
-        </AnimatedCard>
-      ) : (
-        announcements.slice(0, 4).map((a: any) => (
-          <AnimatedCard key={a.id} style={styles.card}>
-            <View style={styles.annRow}>
-              <View style={[styles.annDot, { backgroundColor: theme.tint }]} />
+            {/* System Overview */}
+            {reportSummary && (
+              <SectionCard icon="bar-chart-2" iconColor={theme.tint} title="System Overview" sub="All hostels · Live">
+                <View style={styles.statsRow}>
+                  <StatBox label="Students" value={reportSummary.totalStudents} color={theme.tint} theme={theme} />
+                  <StatBox label="Hostels" value={reportSummary.totalHostels} color="#22c55e" theme={theme} />
+                  <StatBox label="Alerts Sent" value={reportSummary.totalAnnouncements} color="#8b5cf6" theme={theme} />
+                </View>
+              </SectionCard>
+            )}
+
+            {/* Attendance */}
+            {attStats && (
+              <SectionCard
+                icon="check-circle"
+                iconColor="#22c55e"
+                title="Room Attendance"
+                sub={`Today · ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
+                onViewAll={() => router.push("/(tabs)/lostandfound")}
+              >
+                <View style={styles.statsRow}>
+                  <StatBox label="Total" value={attStats.total} color={theme.text} theme={theme} />
+                  <StatBox label="In Campus" value={attStats.entered} color="#22c55e" theme={theme} />
+                  <StatBox label="Out" value={attStats.notEntered} color="#f59e0b" theme={theme} />
+                </View>
+              </SectionCard>
+            )}
+
+            {/* Campus Check-ins */}
+            <SectionCard
+              icon="log-in"
+              iconColor="#8b5cf6"
+              title="Campus Check-ins"
+              sub="Live · Today"
+              onViewAll={() => router.push("/(tabs)/lostandfound")}
+            >
+              <View style={styles.statsRow}>
+                <StatBox label="Checked In" value={checkinStats?.total ?? 0} color="#8b5cf6" theme={theme} />
+                <StatBox label="Checked Out" value={checkinStats?.checkedOut ?? 0} color="#6366f1" theme={theme} />
+                <StatBox label="Still Inside" value={(checkinStats?.total ?? 0) - (checkinStats?.checkedOut ?? 0)} color="#22c55e" theme={theme} />
+              </View>
+            </SectionCard>
+
+            {/* Inventory */}
+            <SectionCard
+              icon="package"
+              iconColor="#06b6d4"
+              title="Inventory Status"
+              sub="Live · All Hostels"
+              onViewAll={() => router.push("/admin/inventory-table")}
+            >
+              <View style={styles.statsRow}>
+                <StatBox label="Total" value={invTotal} color={theme.text} theme={theme} />
+                <StatBox label="Submitted" value={invSubmitted} color="#06b6d4" theme={theme} />
+                <StatBox label="Pending" value={invTotal - invSubmitted} color="#f59e0b" theme={theme} />
+              </View>
+              {invTotal > 0 && invTotal - invSubmitted > 0 && (
+                <View style={[styles.alertRow, { backgroundColor: "#fef3c710", borderColor: "#f59e0b40" }]}>
+                  <Feather name="alert-triangle" size={12} color="#f59e0b" />
+                  <Text style={[styles.alertText, { color: "#f59e0b" }]}>
+                    {invTotal - invSubmitted} students have pending inventory
+                  </Text>
+                </View>
+              )}
+            </SectionCard>
+
+            {/* Mess Cards */}
+            <SectionCard
+              icon="credit-card"
+              iconColor="#22c55e"
+              title="Mess Cards"
+              sub="Live · Today"
+              onViewAll={() => setMessCardOpen(true)}
+            >
+              <View style={styles.statsRow}>
+                <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
+                <StatBox label="Given" value={messStats?.cardGivenCount ?? 0} color="#22c55e" theme={theme} />
+                <StatBox label="Pending" value={(attStats?.total ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
+              </View>
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); setMessCardOpen(true); }}
+                style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
+              >
+                <Feather name="credit-card" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Manage Mess Cards</Text>
+              </Pressable>
+            </SectionCard>
+
+            {/* Quick Grid */}
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 10 }]}>
+              Quick Access
+            </Text>
+            <View style={styles.quickGrid}>
+              <QuickCard label="Students" icon="users" color={theme.tint} onPress={() => router.push("/(tabs)/hostel")} />
+              <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => router.push("/(tabs)/lostandfound")} />
+              <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => setMessCardOpen(true)} />
+              <QuickCard label="Inventory" icon="package" color="#06b6d4" onPress={() => router.push("/admin/inventory-table")} />
+              <QuickCard label="Search" icon="search" color="#3b82f6" onPress={() => router.push("/admin/search")} />
+              <QuickCard label="Staff" icon="activity" color="#8b5cf6" onPress={() => router.push("/admin/staff-status")} />
+              <QuickCard label="Hostels" icon="home" color="#f59e0b" onPress={() => router.push("/admin/hostels")} />
+              <QuickCard label="Post Alert" icon="volume-2" color="#ef4444" onPress={() => router.push("/admin/post-announcement")} />
+              {isSuperAdmin && <>
+                <QuickCard label="Approvals" icon="user-check" color="#ef4444" badge={pendingNum} onPress={() => router.push("/admin/approvals")} />
+                <QuickCard label="Activity Logs" icon="clock" color="#06b6d4" onPress={() => router.push("/admin/activity-logs")} />
+                <QuickCard label="CSV Import" icon="upload-cloud" color="#f59e0b" onPress={() => router.push("/admin/csv-import")} />
+                <QuickCard label="Reports" icon="download" color="#ef4444" onPress={() => router.push("/admin/reports")} />
+                <QuickCard label="Master Table" icon="database" color="#6366f1" onPress={() => router.push("/admin/master-table")} />
+                <QuickCard label="Manage Users" icon="user-plus" color="#f59e0b" onPress={() => router.push("/admin/manage-admins")} />
+              </>}
+            </View>
+          </>
+        )}
+
+        {/* ── Student view ────────────────────────────────────────────── */}
+        {isStudent && (
+          <AnimatedCard style={styles.card}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={[styles.cardIconBox, { backgroundColor: theme.tint + "1A" }]}>
+                <Feather name="home" size={17} color={theme.tint} />
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.annTitle, { color: theme.text }]}>{a.title}</Text>
-                <Text style={[styles.annContent, { color: theme.textSecondary }]} numberOfLines={2}>{a.content}</Text>
-                <Text style={[styles.annDate, { color: theme.textTertiary }]}>
-                  {new Date(a.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                <Text style={[styles.cardTitle, { color: theme.text }]}>My Hostel</Text>
+                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
+                  {user?.hostelId ? "View details & contacts" : "No hostel assigned yet"}
                 </Text>
               </View>
+              <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/hostel"); }} hitSlop={10}>
+                <Feather name="chevron-right" size={17} color={theme.textTertiary} />
+              </Pressable>
             </View>
           </AnimatedCard>
-        ))
-      )}
-    </ScrollView>
-  );
-}
+        )}
 
-function StatBox({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
-  return (
-    <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Text style={[styles.statVal, { color }]}>{value ?? "—"}</Text>
-      <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</Text>
-    </View>
+        {/* ── Announcements (all roles) ──────────────────────────────── */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 8, marginTop: 4 }]}>
+          Announcements
+        </Text>
+
+        {annLoading ? (
+          <View style={{ paddingHorizontal: 20 }}><CardSkeleton /><CardSkeleton /></View>
+        ) : !announcements?.length ? (
+          <AnimatedCard style={styles.card}>
+            <View style={styles.emptyState}>
+              <Feather name="bell-off" size={28} color={theme.textTertiary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No announcements</Text>
+            </View>
+          </AnimatedCard>
+        ) : (
+          announcements.slice(0, 5).map((a: any) => (
+            <AnimatedCard key={a.id} style={styles.card}>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <View style={[styles.annDot, { backgroundColor: theme.tint }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.annTitle, { color: theme.text }]}>{a.title}</Text>
+                  <Text style={[styles.annBody, { color: theme.textSecondary }]} numberOfLines={2}>{a.content}</Text>
+                  <Text style={[styles.annDate, { color: theme.textTertiary }]}>
+                    {new Date(a.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </Text>
+                </View>
+              </View>
+            </AnimatedCard>
+          ))
+        )}
+      </ScrollView>
+
+      <MessCardModal visible={messCardOpen} onClose={() => setMessCardOpen(false)} />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, marginBottom: 16, gap: 12 },
-  greeting: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  userName: { fontSize: 26, fontFamily: "Inter_700Bold" },
-  statusBanner: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 20, marginBottom: 14, padding: 14, borderRadius: 14, borderWidth: 1.5 },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusText: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  statusSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  statusToggleBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, minWidth: 90, alignItems: "center", justifyContent: "center" },
-  statusToggleTxt: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  hero: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  greeting: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  heroName: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  statusBanner: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, marginBottom: 14, padding: 14, borderRadius: 14, borderWidth: 1 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  statusSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  shiftBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
+  shiftBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  pendingAlert: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: 14, borderWidth: 1 },
+  pendingAlertIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  pendingAlertTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  pendingAlertSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   card: { marginHorizontal: 20, marginBottom: 12 },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  cardTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  cardSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  sectionLabel: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  statsRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  statBox: { flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 10, borderWidth: 1, gap: 3 },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  cardIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  cardTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  cardSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  viewAllBtn: { padding: 4 },
+  statsRow: { flexDirection: "row", gap: 0, marginBottom: 2 },
+  statBox: { flex: 1, alignItems: "center", paddingVertical: 10 },
   statVal: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, paddingVertical: 12 },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 10, borderRadius: 10, paddingVertical: 11 },
   actionBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  quickGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 10, marginBottom: 12 },
-  quickCard: { width: "30%", alignItems: "center", paddingVertical: 14, borderRadius: 12, borderWidth: 1, gap: 8 },
+  alertRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, padding: 8, borderRadius: 8, borderWidth: 1 },
+  alertText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  sectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.6 },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 10, marginBottom: 16 },
+  quickCard: { width: "22%", minWidth: 76, alignItems: "center", padding: 12, borderRadius: 14, borderWidth: 1, gap: 6, position: "relative" },
   quickIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  quickLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  annRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  annDot: { width: 4, borderRadius: 2, marginTop: 4, alignSelf: "stretch" },
+  quickLabel: { fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center" },
+  quickBadge: { position: "absolute", top: 6, right: 6, backgroundColor: "#ef4444", borderRadius: 8, minWidth: 16, height: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
+  quickBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
+  assignedPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  assignedPillText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  annDot: { width: 3, borderRadius: 2, marginTop: 4, alignSelf: "stretch" },
   annTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
-  annContent: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  annBody: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
   annDate: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
-  emptyState: { alignItems: "center", paddingVertical: 24, gap: 8 },
+  emptyState: { alignItems: "center", gap: 8, paddingVertical: 20 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  // Assigned hostel card
-  assignedHostelCard: { borderWidth: 2 },
-  hostelIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  hostelHighlightName: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  hostelHighlightLoc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  hostelHighlightMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  assignedBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
-  assignedBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold" },
-  missingAlert: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
-  missingAlertText: { fontSize: 12, fontFamily: "Inter_600SemiBold", flex: 1 },
 });
