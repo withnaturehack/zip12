@@ -25,6 +25,18 @@ interface Student {
   hostelId?: string;
   hostelName?: string;
   attendanceStatus?: string;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+}
+
+function formatListTime(ts?: string | null): string {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour12: true,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 interface CheckinState {
@@ -84,28 +96,38 @@ function AttendanceModal({
   onClose: () => void;
   theme: any;
   request: any;
-  onDataChanged: () => void;
+  onDataChanged: (studentId: string, patch: Partial<Student>) => void;
 }) {
   const [state, setState] = useState<CheckinState | null>(null);
   const [loadingState, setLoadingState] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const loadState = useCallback(async () => {
+  const loadState = useCallback(async (opts?: { silent?: boolean }) => {
     if (!student) return;
-    setLoadingState(true);
+    if (!opts?.silent) setLoadingState(true);
     try {
       const data = await request(`/checkins/${student.id}/today`);
       setState(data);
+      return data;
     } catch {
       setState(null);
+      return null;
     } finally {
-      setLoadingState(false);
+      if (!opts?.silent) setLoadingState(false);
     }
   }, [student, request]);
 
   useEffect(() => {
     if (visible && student) loadState();
   }, [visible, student]);
+
+  useEffect(() => {
+    if (!visible || !student) return;
+    const timer = setInterval(() => {
+      loadState({ silent: true });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [visible, student, loadState]);
 
   if (!student) return null;
 
@@ -118,8 +140,13 @@ function AttendanceModal({
     setActionLoading(action);
     try {
       await fn();
-      await loadState();
-      onDataChanged();
+      const next = await loadState({ silent: true });
+      const nextCheckin = next?.checkin ?? null;
+      onDataChanged(student.id, {
+        attendanceStatus: nextCheckin && !nextCheckin.checkOutTime ? "entered" : "not_entered",
+        checkInTime: nextCheckin?.checkInTime ?? null,
+        checkOutTime: nextCheckin?.checkOutTime ?? null,
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Action failed");
@@ -146,17 +173,6 @@ function AttendanceModal({
   const checkOut = () => {
     if (!checkin) return;
     doAction("checkout", () => request(`/checkins/${checkin.id}/checkout`, { method: "PATCH", body: JSON.stringify({}) }));
-  };
-
-  const clearData = () => {
-    Alert.alert(
-      "Clear Data",
-      `This will remove today's check-in and reset all inventory for ${student.name}. Continue?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear", style: "destructive", onPress: () => doAction("clear", () => request(`/checkins/${student.id}/today`, { method: "DELETE" })) },
-      ],
-    );
   };
 
   function formatTime(ts: string | null): string {
@@ -204,7 +220,7 @@ function AttendanceModal({
                 <View style={styles.statusRow}>
                   <View style={[styles.statusDot, { backgroundColor: isCheckedOut ? "#6366f1" : isCheckedIn ? "#22c55e" : "#f59e0b" }]} />
                   <Text style={[styles.statusText, { color: theme.text }]}>
-                    {isCheckedOut ? "Checked Out" : isCheckedIn ? "Checked In" : "Not Checked In"}
+                    {isCheckedOut ? "Checked Out" : isCheckedIn ? "Checked In" : "Not Checked In Yet"}
                   </Text>
                   {checkin?.checkInTime && (
                     <Text style={[styles.statusTime, { color: theme.textSecondary }]}>In: {formatTime(checkin.checkInTime)}</Text>
@@ -309,22 +325,6 @@ function AttendanceModal({
                 <Text style={[styles.sectionHint, { color: theme.textTertiary }]}>Submit all given inventory to enable checkout</Text>
               )}
 
-              {/* Clear Data */}
-              {(isCheckedIn || isCheckedOut) && (
-                <Pressable
-                  onPress={clearData}
-                  style={[styles.clearBtn, { borderColor: "#ef444460" }]}
-                >
-                  {actionLoading === "clear" ? (
-                    <ActivityIndicator color="#ef4444" size="small" />
-                  ) : (
-                    <>
-                      <Feather name="trash-2" size={14} color="#ef4444" />
-                      <Text style={[styles.clearBtnText, { color: "#ef4444" }]}>Clear All Data for Today</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
             </>
           )}
         </ScrollView>
@@ -336,7 +336,19 @@ function AttendanceModal({
 // ─── Student Row ────────────────────────────────────────────────────────────────
 
 function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: () => void }) {
-  const attColor = item.attendanceStatus === "entered" ? "#22c55e" : "#94a3b8";
+  const hasCheckedIn = !!item.checkInTime;
+  const hasCheckedOut = !!item.checkOutTime;
+  const isCurrentlyIn = hasCheckedIn && !hasCheckedOut;
+
+  const attColor = isCurrentlyIn ? "#22c55e" : hasCheckedOut ? "#6366f1" : "#f59e0b";
+  const statusLabel = isCurrentlyIn ? "In" : hasCheckedOut ? "Checked Out" : "Not In Yet";
+
+  const checkInLabel = hasCheckedIn ? `In ${formatListTime(item.checkInTime)}` : "";
+  const checkOutLabel = hasCheckedOut ? `Out ${formatListTime(item.checkOutTime)}` : "";
+  const timeMeta = hasCheckedIn
+    ? (checkOutLabel ? `${checkInLabel} · ${checkOutLabel}` : checkInLabel)
+    : "Not checked in yet";
+
   return (
     <Pressable
       onPress={onPress}
@@ -351,13 +363,12 @@ function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: 
           {item.rollNumber || item.email}
           {item.roomNumber ? ` · Room ${item.roomNumber}` : ""}
         </Text>
+        <Text style={[styles.timeMeta, { color: theme.textTertiary }]} numberOfLines={1}>{timeMeta}</Text>
       </View>
       <View style={{ alignItems: "flex-end", gap: 4 }}>
         <View style={[styles.attBadge, { backgroundColor: attColor + "18" }]}>
           <View style={[styles.attDot, { backgroundColor: attColor }]} />
-          <Text style={[styles.attLabel, { color: attColor }]}>
-            {item.attendanceStatus === "entered" ? "In" : "Out"}
-          </Text>
+          <Text style={[styles.attLabel, { color: attColor }]} numberOfLines={1}>{statusLabel}</Text>
         </View>
         <Feather name="chevron-right" size={14} color={theme.textTertiary} />
       </View>
@@ -414,7 +425,7 @@ function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: a
             <View style={[styles.selfStatusCard, { backgroundColor: isOut ? "#6366f115" : isIn ? "#22c55e15" : theme.surface, borderColor: isOut ? "#6366f140" : isIn ? "#22c55e40" : theme.border }]}>
               <Feather name={isOut ? "log-out" : isIn ? "log-in" : "clock"} size={28} color={isOut ? "#6366f1" : isIn ? "#22c55e" : "#f59e0b"} />
               <Text style={[styles.selfStatusText, { color: isOut ? "#6366f1" : isIn ? "#22c55e" : "#f59e0b" }]}>
-                {isOut ? "Checked Out" : isIn ? "Checked In" : "Not Checked In Today"}
+                {isOut ? "Checked Out" : isIn ? "Checked In" : "Not Checked In Yet"}
               </Text>
               {checkin?.checkInTime && (
                 <Text style={[styles.selfStatusSub, { color: theme.textSecondary }]}>
@@ -469,7 +480,7 @@ export default function AttendanceTab() {
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
 
-  const { user, isStudent } = useAuth();
+  const { user, isStudent, isCoordinator, isSuperAdmin } = useAuth();
   const request = useApiRequest();
 
   const [search, setSearch] = useState("");
@@ -505,7 +516,20 @@ export default function AttendanceTab() {
     setRefreshing(false);
   }, [fetchStudents]);
 
+  const handleStudentDataChanged = useCallback((studentId: string, patch: Partial<Student>) => {
+    setAllStudents(prev => prev.map(s => (s.id === studentId ? { ...s, ...patch } : s)));
+  }, []);
+
   useEffect(() => { if (!isStudent) fetchStudents(true); }, [isStudent, search]);
+
+  useEffect(() => {
+    if (isStudent || (!isCoordinator && !isSuperAdmin)) return;
+    const intervalMs = 5000;
+    const timer = setInterval(() => {
+      fetchStudents(true);
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [isStudent, isCoordinator, isSuperAdmin, fetchStudents]);
 
   if (isStudent) {
     return <StudentSelfView theme={theme} user={user} request={request} topPad={topPad} />;
@@ -518,7 +542,7 @@ export default function AttendanceTab() {
           <Text style={[styles.pageTitle, { color: theme.text }]}>Attendance</Text>
           {allStudents.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
-              <Text style={[styles.countText, { color: theme.tint }]}>{allStudents.length}{hasMore ? "+" : ""}</Text>
+              <Text style={[styles.countText, { color: theme.tint }]}>{allStudents.length}</Text>
             </View>
           )}
         </View>
@@ -577,7 +601,7 @@ export default function AttendanceTab() {
         onClose={() => setSelectedStudent(null)}
         theme={theme}
         request={request}
-        onDataChanged={() => fetchStudents(true)}
+        onDataChanged={handleStudentDataChanged}
       />
     </View>
   );
@@ -592,12 +616,13 @@ const styles = StyleSheet.create({
   countText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
-  studentRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
+  studentRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   studentMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  attBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  timeMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3 },
+  attBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, maxWidth: 118 },
   attDot: { width: 6, height: 6, borderRadius: 3 },
   attLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   emptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 12 },
@@ -622,8 +647,6 @@ const styles = StyleSheet.create({
   stepBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
   hintText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
-  clearBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
-  clearBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   // Student self view
   selfStatusCard: { padding: 20, borderRadius: 14, borderWidth: 1, alignItems: "center", gap: 8, marginBottom: 20 },
   selfStatusText: { fontSize: 18, fontFamily: "Inter_700Bold" },

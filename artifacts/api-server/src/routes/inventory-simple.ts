@@ -205,11 +205,20 @@ router.patch("/:studentId/mess-card", requireVolunteer, async (req: AuthRequest,
     .where(eq(studentInventoryTable.studentId, studentId));
 
   const newValue = messCard !== undefined ? !!messCard : !(existing?.messCard ?? false);
+  const now = new Date();
+  const givenAt = newValue ? now : null;
+  const revokedAt = newValue ? null : now;
 
   let record;
   if (existing) {
     [record] = await db.update(studentInventoryTable)
-      .set({ messCard: newValue, updatedBy: req.userId!, updatedAt: new Date() })
+      .set({
+        messCard: newValue,
+        messCardGivenAt: givenAt,
+        messCardRevokedAt: revokedAt,
+        updatedBy: req.userId!,
+        updatedAt: now,
+      })
       .where(eq(studentInventoryTable.id, existing.id))
       .returning();
   } else {
@@ -220,12 +229,20 @@ router.patch("/:studentId/mess-card", requireVolunteer, async (req: AuthRequest,
       mattress: false, bedsheet: false, pillow: false,
       mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
       messCard: newValue,
+      messCardGivenAt: givenAt,
+      messCardRevokedAt: revokedAt,
       inventoryLocked: false,
       updatedBy: req.userId!,
     }).returning();
   }
 
-  res.json({ ...record, messCard: newValue });
+  res.json({
+    ...record,
+    messCard: newValue,
+    messCardGivenAt: record.messCardGivenAt?.toISOString() || null,
+    messCardRevokedAt: record.messCardRevokedAt?.toISOString() || null,
+    lockedAt: record.lockedAt?.toISOString() || null,
+  });
 });
 
 // GET /api/inventory-simple/student/:studentId — single student inventory

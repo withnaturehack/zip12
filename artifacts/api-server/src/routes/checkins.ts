@@ -22,6 +22,8 @@ async function resetInventory(studentId: string, hostelId: string, updatedBy: st
       pillowSubmitted: false,
       inventoryLocked: false,
       messCard: false,
+      messCardGivenAt: null,
+      messCardRevokedAt: null,
       lockedBy: null,
       lockedAt: null,
       updatedBy,
@@ -40,6 +42,8 @@ async function resetInventory(studentId: string, hostelId: string, updatedBy: st
       pillowSubmitted: false,
       inventoryLocked: false,
       messCard: false,
+      messCardGivenAt: null,
+      messCardRevokedAt: null,
       updatedBy,
     });
   }
@@ -61,6 +65,10 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
     .where(and(eq(checkinsTable.studentId, studentId), eq(checkinsTable.date, date)));
 
   if (existing) {
+    await db.update(usersTable)
+      .set({ attendanceStatus: existing.checkOutTime ? "not_entered" : "entered" })
+      .where(eq(usersTable.id, studentId));
+
     res.json({
       ...existing,
       checkInTime: existing.checkInTime?.toISOString() || null,
@@ -82,6 +90,11 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
 
   // Reset inventory fresh on every new check-in
   await resetInventory(studentId, student.hostelId || "", req.userId!);
+
+  // Keep list status in sync for screens that read users.attendanceStatus.
+  await db.update(usersTable)
+    .set({ attendanceStatus: "entered" })
+    .where(eq(usersTable.id, studentId));
 
   res.status(201).json({
     ...record,
@@ -109,6 +122,10 @@ router.patch("/:id/checkout", requireVolunteer, async (req: AuthRequest, res) =>
     .where(eq(checkinsTable.id, req.params.id))
     .returning();
 
+  await db.update(usersTable)
+    .set({ attendanceStatus: "not_entered" })
+    .where(eq(usersTable.id, checkin.studentId));
+
   res.json({
     ...record,
     checkInTime: record.checkInTime?.toISOString() || null,
@@ -133,6 +150,10 @@ router.delete("/:studentId/today", requireVolunteer, async (req: AuthRequest, re
 
   // Reset inventory
   await resetInventory(studentId, student.hostelId || "", req.userId!);
+
+  await db.update(usersTable)
+    .set({ attendanceStatus: "not_entered" })
+    .where(eq(usersTable.id, studentId));
 
   res.json({ success: true, message: "Check-in and inventory cleared for today" });
 });

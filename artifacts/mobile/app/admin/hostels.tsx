@@ -183,6 +183,9 @@ export default function HostelsAdminScreen() {
   const { data: hostels, isLoading, refetch } = useQuery({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
+    refetchInterval: 10000,
+    staleTime: 5000,
+    refetchOnReconnect: true,
   });
 
   const hostelMutation = useMutation({

@@ -42,6 +42,9 @@ export default function ManageAdminsScreen() {
   const { data: admins, isLoading, refetch } = useQuery({
     queryKey: ["admin-users"],
     queryFn: () => request("/admin/admin-users"),
+    refetchInterval: 8000,
+    staleTime: 3000,
+    refetchOnReconnect: true,
   });
 
   const createMutation = useMutation({

@@ -148,15 +148,16 @@ export default function HomeScreen() {
     queryKey: ["pending-count"],
     queryFn: () => request("/approvals/count"),
     enabled: isSuperAdmin,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 10000,
+    staleTime: 5000,
   });
 
   const { data: allHostels = [] } = useQuery<any[]>({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
     enabled: isAdmin && assignedHostelIds.length > 0,
-    staleTime: 60000,
+    refetchInterval: 20000,
+    staleTime: 10000,
   });
 
   const assignedHostels = React.useMemo(() => {

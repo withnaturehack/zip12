@@ -11,6 +11,18 @@ import { useApiRequest } from "@/context/AuthContext";
 
 const PAGE_SIZE = 30;
 
+function formatActionAt(ts?: string | null): string {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour12: true,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function MessCardModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -52,11 +64,16 @@ export function MessCardModal({ visible, onClose }: { visible: boolean; onClose:
     setToggling(student.id);
     try {
       const newVal = !(student.messCard ?? false);
-      await request(`/inventory-simple/${student.id}/mess-card`, {
+      const updated = await request(`/inventory-simple/${student.id}/mess-card`, {
         method: "PATCH",
         body: JSON.stringify({ messCard: newVal }),
       });
-      setStudents(prev => prev.map(s => s.id === student.id ? { ...s, messCard: newVal } : s));
+      setStudents(prev => prev.map(s => s.id === student.id ? {
+        ...s,
+        messCard: updated?.messCard ?? newVal,
+        messCardGivenAt: updated?.messCardGivenAt ?? (newVal ? new Date().toISOString() : null),
+        messCardRevokedAt: updated?.messCardRevokedAt ?? (!newVal ? new Date().toISOString() : null),
+      } : s));
     } catch { }
     setToggling(null);
   };
@@ -140,6 +157,16 @@ export function MessCardModal({ visible, onClose }: { visible: boolean; onClose:
                   <Text style={[styles.meta, { color: theme.textSecondary }]} numberOfLines={1}>
                     {item.rollNumber || item.email}{item.roomNumber ? ` · Room ${item.roomNumber}` : ""}
                   </Text>
+                  {isGiven && item.messCardGivenAt && (
+                    <Text style={[styles.timeMeta, { color: theme.textTertiary }]} numberOfLines={1}>
+                      Given at {formatActionAt(item.messCardGivenAt)}
+                    </Text>
+                  )}
+                  {!isGiven && item.messCardRevokedAt && (
+                    <Text style={[styles.timeMeta, { color: theme.textTertiary }]} numberOfLines={1}>
+                      Revoked at {formatActionAt(item.messCardRevokedAt)}
+                    </Text>
+                  )}
                 </View>
                 {isLoading ? (
                   <ActivityIndicator size="small" color={theme.tint} />
@@ -148,9 +175,9 @@ export function MessCardModal({ visible, onClose }: { visible: boolean; onClose:
                     backgroundColor: isGiven ? "#22c55e18" : theme.surface,
                     borderColor: isGiven ? "#22c55e50" : theme.border,
                   }]}>
-                    <Feather name={isGiven ? "check-circle" : "circle"} size={14} color={isGiven ? "#22c55e" : theme.textTertiary} />
+                    <Feather name={isGiven ? "rotate-ccw" : "check-circle"} size={14} color={isGiven ? "#22c55e" : theme.textTertiary} />
                     <Text style={[styles.toggleLabel, { color: isGiven ? "#22c55e" : theme.textSecondary }]}>
-                      {isGiven ? "Given" : "Give"}
+                      {isGiven ? "Revoke" : "Give"}
                     </Text>
                   </View>
                 )}
@@ -179,6 +206,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   name: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   meta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  timeMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   toggleChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   toggleLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   empty: { alignItems: "center", paddingVertical: 48, gap: 8 },

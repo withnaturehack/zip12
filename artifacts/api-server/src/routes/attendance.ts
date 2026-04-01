@@ -64,9 +64,10 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
       pillowSubmitted: inventoryMap[s.id].pillowSubmitted,
       messCard: inventoryMap[s.id].messCard,
       messCardGivenAt: inventoryMap[s.id].messCardGivenAt?.toISOString() || null,
+      messCardRevokedAt: inventoryMap[s.id].messCardRevokedAt?.toISOString() || null,
       inventoryLocked: inventoryMap[s.id].inventoryLocked,
       lockedAt: inventoryMap[s.id].lockedAt?.toISOString() || null,
-    } : { mattress: false, bedsheet: false, pillow: false, mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false, messCard: false, messCardGivenAt: null, inventoryLocked: false, lockedAt: null },
+    } : { mattress: false, bedsheet: false, pillow: false, mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false, messCard: false, messCardGivenAt: null, messCardRevokedAt: null, inventoryLocked: false, lockedAt: null },
     hasInventory: !!inventoryMap[s.id],
   }));
 
@@ -130,8 +131,23 @@ router.get("/inventory/:studentId", requireAuth, async (req: AuthRequest, res) =
   const { studentId } = req.params;
   const [record] = await db.select().from(studentInventoryTable).where(eq(studentInventoryTable.studentId, studentId));
   res.json(record
-    ? { ...record, lockedAt: record.lockedAt?.toISOString() || null }
-    : { studentId, mattress: false, bedsheet: false, pillow: false, messCard: false, inventoryLocked: false, lockedAt: null });
+    ? {
+      ...record,
+      lockedAt: record.lockedAt?.toISOString() || null,
+      messCardGivenAt: record.messCardGivenAt?.toISOString() || null,
+      messCardRevokedAt: record.messCardRevokedAt?.toISOString() || null,
+    }
+    : {
+      studentId,
+      mattress: false,
+      bedsheet: false,
+      pillow: false,
+      messCard: false,
+      messCardGivenAt: null,
+      messCardRevokedAt: null,
+      inventoryLocked: false,
+      lockedAt: null,
+    });
 });
 
 // PATCH /api/attendance/inventory/:studentId — update room inventory (blocked if individual item already submitted)
@@ -303,16 +319,24 @@ router.patch("/mess-card/:studentId", requireVolunteer, async (req: AuthRequest,
   const [existing] = await db.select().from(studentInventoryTable).where(eq(studentInventoryTable.studentId, studentId));
 
   const newMessCard = messCard !== undefined ? messCard : (existing ? !existing.messCard : true);
-  const givenAt = newMessCard ? new Date() : null;
+  const now = new Date();
+  const givenAt = newMessCard ? now : null;
+  const revokedAt = newMessCard ? null : now;
 
   if (existing) {
     const [updated] = await db.update(studentInventoryTable).set({
       messCard: newMessCard,
       messCardGivenAt: givenAt,
+      messCardRevokedAt: revokedAt,
       updatedBy: req.userId!,
-      updatedAt: new Date(),
+      updatedAt: now,
     }).where(eq(studentInventoryTable.studentId, studentId)).returning();
-    res.json({ ...updated, lockedAt: updated.lockedAt?.toISOString() || null, messCardGivenAt: updated.messCardGivenAt?.toISOString() || null });
+    res.json({
+      ...updated,
+      lockedAt: updated.lockedAt?.toISOString() || null,
+      messCardGivenAt: updated.messCardGivenAt?.toISOString() || null,
+      messCardRevokedAt: updated.messCardRevokedAt?.toISOString() || null,
+    });
   } else {
     const [record] = await db.insert(studentInventoryTable).values({
       id: generateId(),
@@ -323,10 +347,16 @@ router.patch("/mess-card/:studentId", requireVolunteer, async (req: AuthRequest,
       pillow: false,
       messCard: newMessCard,
       messCardGivenAt: givenAt,
+      messCardRevokedAt: revokedAt,
       inventoryLocked: false,
       updatedBy: req.userId!,
     }).returning();
-    res.json({ ...record, lockedAt: null, messCardGivenAt: record.messCardGivenAt?.toISOString() || null });
+    res.json({
+      ...record,
+      lockedAt: null,
+      messCardGivenAt: record.messCardGivenAt?.toISOString() || null,
+      messCardRevokedAt: record.messCardRevokedAt?.toISOString() || null,
+    });
   }
 });
 

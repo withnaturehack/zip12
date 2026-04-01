@@ -1,9 +1,13 @@
 import { Router } from "express";
-import { db, usersTable, hostelsTable } from "@workspace/db";
-import { eq, and, or, ilike, sql } from "drizzle-orm";
-import { requireAuth, requireAdmin, requireVolunteer, generateId, hashPassword, AuthRequest, COORDINATOR_ROLES, VOLUNTEER_ROLES } from "../lib/auth.js";
+import { db, usersTable, hostelsTable, studentInventoryTable, checkinsTable } from "@workspace/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { requireAuth, requireAdmin, requireVolunteer, generateId, hashPassword, AuthRequest } from "../lib/auth.js";
 
 const router = Router();
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
 
 // GET /api/students — accessible to volunteers and above; volunteers see only their hostel
 router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
@@ -54,12 +58,67 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     );
   }
 
-  const total = rows.length;
   const lim = Math.min(Number(limit), 500);
   const off = Number(offset);
   const paginated = rows.slice(off, off + lim);
 
-  res.json(paginated.map(s => ({ ...s, createdAt: s.createdAt.toISOString() })));
+  const studentIds = paginated.map(s => s.id);
+  const inventoryRows = studentIds.length
+    ? await db
+      .select({
+        studentId: studentInventoryTable.studentId,
+        messCard: studentInventoryTable.messCard,
+        messCardGivenAt: studentInventoryTable.messCardGivenAt,
+        messCardRevokedAt: studentInventoryTable.messCardRevokedAt,
+      })
+      .from(studentInventoryTable)
+      .where(inArray(studentInventoryTable.studentId, studentIds))
+    : [];
+
+  const checkinRows = studentIds.length
+    ? await db
+      .select({
+        studentId: checkinsTable.studentId,
+        checkInTime: checkinsTable.checkInTime,
+        checkOutTime: checkinsTable.checkOutTime,
+      })
+      .from(checkinsTable)
+      .where(and(
+        inArray(checkinsTable.studentId, studentIds),
+        eq(checkinsTable.date, todayStr()),
+      ))
+    : [];
+
+  const inventoryByStudentId = new Map(
+    inventoryRows.map(row => [row.studentId, row]),
+  );
+
+  const checkinByStudentId = new Map<string, { checkInTime: Date | null; checkOutTime: Date | null }>();
+  for (const row of checkinRows) {
+    const prev = checkinByStudentId.get(row.studentId);
+    const rowTs = row.checkInTime?.getTime() || 0;
+    const prevTs = prev?.checkInTime?.getTime() || 0;
+    if (!prev || rowTs >= prevTs) {
+      checkinByStudentId.set(row.studentId, {
+        checkInTime: row.checkInTime,
+        checkOutTime: row.checkOutTime,
+      });
+    }
+  }
+
+  res.json(paginated.map(s => {
+    const inv = inventoryByStudentId.get(s.id);
+    const checkin = checkinByStudentId.get(s.id);
+    return {
+      ...s,
+      messCard: !!inv?.messCard,
+      messCardGivenAt: inv?.messCardGivenAt?.toISOString() || null,
+      messCardRevokedAt: inv?.messCardRevokedAt?.toISOString() || null,
+      checkInTime: checkin?.checkInTime?.toISOString() || null,
+      checkOutTime: checkin?.checkOutTime?.toISOString() || null,
+      createdAt: s.createdAt.toISOString(),
+    };
+  }));
 });
 
 // GET /api/students/:id
@@ -85,7 +144,36 @@ router.get("/:id", requireAuth, async (req, res) => {
     .where(eq(usersTable.id, req.params.id));
 
   if (!student) { res.status(404).json({ error: "Not Found" }); return; }
-  res.json({ ...student, createdAt: student.createdAt.toISOString() });
+
+  const [inv] = await db
+    .select({
+      messCard: studentInventoryTable.messCard,
+      messCardGivenAt: studentInventoryTable.messCardGivenAt,
+      messCardRevokedAt: studentInventoryTable.messCardRevokedAt,
+    })
+    .from(studentInventoryTable)
+    .where(eq(studentInventoryTable.studentId, req.params.id));
+
+  const [todayCheckin] = await db
+    .select({
+      checkInTime: checkinsTable.checkInTime,
+      checkOutTime: checkinsTable.checkOutTime,
+    })
+    .from(checkinsTable)
+    .where(and(
+      eq(checkinsTable.studentId, req.params.id),
+      eq(checkinsTable.date, todayStr()),
+    ));
+
+  res.json({
+    ...student,
+    messCard: !!inv?.messCard,
+    messCardGivenAt: inv?.messCardGivenAt?.toISOString() || null,
+    messCardRevokedAt: inv?.messCardRevokedAt?.toISOString() || null,
+    checkInTime: todayCheckin?.checkInTime?.toISOString() || null,
+    checkOutTime: todayCheckin?.checkOutTime?.toISOString() || null,
+    createdAt: student.createdAt.toISOString(),
+  });
 });
 
 // POST /api/students

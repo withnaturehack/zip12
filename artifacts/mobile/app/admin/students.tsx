@@ -44,11 +44,17 @@ export default function StudentsAdminScreen() {
   const { data: students, isLoading, refetch } = useQuery({
     queryKey: ["students"],
     queryFn: () => request("/students"),
+    refetchInterval: 8000,
+    staleTime: 3000,
+    refetchOnReconnect: true,
   });
 
   const { data: hostels } = useQuery({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
+    refetchInterval: 20000,
+    staleTime: 10000,
+    refetchOnReconnect: true,
   });
 
   const createMutation = useMutation({
