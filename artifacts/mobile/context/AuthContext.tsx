@@ -3,9 +3,6 @@ import React, { createContext, useContext, useEffect, useState, useCallback, Rea
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-// On web (browser): use relative /api — Metro proxy forwards it to the API server.
-// This works identically in dev and in deployment without needing to know the domain.
-// On native (Expo Go / APK): use the absolute URL from app config or env.
 const API_BASE: string =
   Platform.OS === "web"
     ? "/api"
@@ -13,7 +10,7 @@ const API_BASE: string =
       process.env.EXPO_PUBLIC_API_URL ||
       "http://localhost:8080/api";
 
-export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin";
+export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin" | "pending";
 
 export interface User {
   id: string;
@@ -42,7 +39,7 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, rollNumber: string, contactNumber?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, rollNumber: string) => Promise<string>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isCoordinator: boolean;
@@ -89,16 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: data.user, token: data.token, isLoading: false });
   }
 
-  async function register(name: string, email: string, password: string, rollNumber: string, contactNumber?: string) {
+  // Returns a message string (for pending approval flow)
+  async function register(name: string, email: string, password: string, rollNumber: string): Promise<string> {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, rollNumber, contactNumber }),
+      body: JSON.stringify({ name, email, password, rollNumber }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Registration failed");
-    await AsyncStorage.setItem("token", data.token);
-    setState({ user: data.user, token: data.token, isLoading: false });
+    // Registration now returns pending — no token
+    return data.message || "Registration submitted. Awaiting Super Admin approval.";
   }
 
   async function logout() {

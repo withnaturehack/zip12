@@ -18,6 +18,7 @@ import importRouter from "./import.js";
 import pdfExportRouter from "./pdf-export.js";
 import checkinsRouter from "./checkins.js";
 import messAttendanceRouter from "./mess-attendance.js";
+import approvalsRouter from "./approvals.js";
 
 const router: IRouter = Router();
 
@@ -41,5 +42,6 @@ router.use("/import", importRouter);
 router.use("/pdf", pdfExportRouter);
 router.use("/checkins", checkinsRouter);
 router.use("/mess-attendance", messAttendanceRouter);
+router.use("/approvals", approvalsRouter);
 
 export default router;

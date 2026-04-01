@@ -1,890 +1,636 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Pressable,
-  RefreshControl, Platform, useColorScheme, ActivityIndicator,
-  Modal, TextInput, Alert,
+  View, Text, FlatList, StyleSheet, Pressable, RefreshControl,
+  Platform, useColorScheme, ActivityIndicator, TextInput,
+  Modal, ScrollView, Alert,
 } from "react-native";
-import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  withSequence, withDelay, interpolate, Extrapolation,
-  FadeInDown, FadeIn, ZoomIn, SlideInDown,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
-import { useApiRequest } from "@/context/AuthContext";
+import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
-function formatTime(ts: string | null | undefined): string {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit",
-  });
+const PAGE_SIZE = 30;
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  rollNumber?: string;
+  roomNumber?: string;
+  assignedMess?: string;
+  hostelId?: string;
+  hostelName?: string;
+  attendanceStatus?: string;
 }
 
-// ─── Notification Modal ────────────────────────────────────────────────────────
-
-function NotificationModal({ visible, onClose, theme, request, qc }: {
-  visible: boolean; onClose: () => void; theme: any; request: any; qc: any;
-}) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const close = () => { setTitle(""); setBody(""); onClose(); };
-  const submit = async () => {
-    if (!title.trim()) return;
-    setSubmitting(true);
-    try {
-      await request("/announcements", { method: "POST", body: JSON.stringify({ title, content: body || title }) });
-      qc.invalidateQueries({ queryKey: ["announcements"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      close();
-    } catch (e: any) { Alert.alert("Error", e.message || "Failed"); }
-    setSubmitting(false);
+interface CheckinState {
+  checkin: {
+    id: string;
+    checkInTime: string;
+    checkOutTime: string | null;
+  } | null;
+  inventory: {
+    mattress: boolean;
+    bedsheet: boolean;
+    pillow: boolean;
+    mattressSubmitted: boolean;
+    bedsheetSubmitted: boolean;
+    pillowSubmitted: boolean;
+    inventoryLocked: boolean;
   };
+}
+
+// ─── Step Button ────────────────────────────────────────────────────────────────
+
+function StepButton({
+  label, icon, done, disabled, danger, onPress, loading, theme,
+}: {
+  label: string; icon: string; done?: boolean; disabled?: boolean; danger?: boolean;
+  onPress: () => void; loading?: boolean; theme: any;
+}) {
+  const bg = done ? "#22c55e" : danger ? "#ef4444" : disabled ? theme.surface : theme.tint;
+  const textColor = disabled ? theme.textTertiary : "#fff";
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable style={S.modalOverlay} onPress={close}>
-        <Pressable style={[S.modalSheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
-          <View style={S.modalHandle} />
-          <Text style={[S.modalTitle, { color: theme.text }]}>Send Notification</Text>
-          <Text style={[S.modalSubtitle, { color: theme.textSecondary }]}>Broadcasts to your hostel students</Text>
-          <TextInput placeholder="Notification title *" placeholderTextColor={theme.textTertiary}
-            style={[S.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={title} onChangeText={setTitle} />
-          <TextInput placeholder="Message body (optional)" placeholderTextColor={theme.textTertiary}
-            style={[S.input, S.textArea, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-            value={body} onChangeText={setBody} multiline numberOfLines={3} />
-          <View style={S.modalActions}>
-            <Pressable onPress={close} style={[S.cancelBtn, { borderColor: theme.border }]}>
-              <Text style={[S.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
-            </Pressable>
-            <Pressable onPress={submit} disabled={submitting || !title.trim()}
-              style={[S.submitModalBtn, { backgroundColor: title.trim() ? "#f59e0b" : theme.border }]}>
-              {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={S.submitModalBtnText}>Send</Text>}
-            </Pressable>
+    <Pressable
+      onPress={() => { if (!disabled && !loading) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); } }}
+      style={[
+        styles.stepBtn,
+        { backgroundColor: bg, borderColor: done ? "#16a34a" : disabled ? theme.border : "transparent", opacity: disabled ? 0.55 : 1 },
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator color="#fff" size="small" />
+      ) : (
+        <>
+          <Feather name={(done ? "check-circle" : icon) as any} size={14} color={done ? "#fff" : textColor} />
+          <Text style={[styles.stepBtnText, { color: done ? "#fff" : textColor }]}>{done ? "✓ " + label : label}</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── Attendance Detail Modal ────────────────────────────────────────────────────
+
+function AttendanceModal({
+  student, visible, onClose, theme, request, onDataChanged,
+}: {
+  student: Student | null;
+  visible: boolean;
+  onClose: () => void;
+  theme: any;
+  request: any;
+  onDataChanged: () => void;
+}) {
+  const [state, setState] = useState<CheckinState | null>(null);
+  const [loadingState, setLoadingState] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const loadState = useCallback(async () => {
+    if (!student) return;
+    setLoadingState(true);
+    try {
+      const data = await request(`/checkins/${student.id}/today`);
+      setState(data);
+    } catch {
+      setState(null);
+    } finally {
+      setLoadingState(false);
+    }
+  }, [student, request]);
+
+  useEffect(() => {
+    if (visible && student) loadState();
+  }, [visible, student]);
+
+  if (!student) return null;
+
+  const checkin = state?.checkin ?? null;
+  const inv = state?.inventory ?? { mattress: false, bedsheet: false, pillow: false, mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false, inventoryLocked: false };
+  const isCheckedIn = !!checkin && !checkin.checkOutTime;
+  const isCheckedOut = !!checkin?.checkOutTime;
+
+  async function doAction(action: string, fn: () => Promise<any>) {
+    setActionLoading(action);
+    try {
+      await fn();
+      await loadState();
+      onDataChanged();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Action failed");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const checkIn = () => doAction("checkin", () => request(`/checkins/${student.id}`, { method: "POST", body: JSON.stringify({}) }));
+
+  const giveItem = (item: "mattress" | "bedsheet" | "pillow", val: boolean) =>
+    doAction(`give-${item}`, () => request(`/inventory-simple/${student.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ [item]: val }),
+    }));
+
+  const submitItem = (item: "mattress" | "bedsheet" | "pillow", val: boolean) =>
+    doAction(`submit-${item}`, () => request(`/inventory-simple/${student.id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ [item]: val }),
+    }));
+
+  const checkOut = () => {
+    if (!checkin) return;
+    doAction("checkout", () => request(`/checkins/${checkin.id}/checkout`, { method: "PATCH", body: JSON.stringify({}) }));
+  };
+
+  const clearData = () => {
+    Alert.alert(
+      "Clear Data",
+      `This will remove today's check-in and reset all inventory for ${student.name}. Continue?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear", style: "destructive", onPress: () => doAction("clear", () => request(`/checkins/${student.id}/today`, { method: "DELETE" })) },
+      ],
+    );
+  };
+
+  function formatTime(ts: string | null): string {
+    if (!ts) return "—";
+    return new Date(ts).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" });
+  }
+
+  // Step states
+  const canGiveInventory = isCheckedIn && !isCheckedOut;
+  const canSubmitMattress = canGiveInventory && inv.mattress && !inv.mattressSubmitted;
+  const canSubmitBedsheet = canGiveInventory && inv.bedsheet && !inv.bedsheetSubmitted;
+  const canSubmitPillow = canGiveInventory && inv.pillow && !inv.pillowSubmitted;
+  const canCheckOut = isCheckedIn && inv.inventoryLocked;
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[styles.modalContainer, { backgroundColor: theme.background }]}>
+        {/* Header */}
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+          <View style={[styles.modalAvatar, { backgroundColor: theme.tint + "20" }]}>
+            <Text style={[styles.modalAvatarText, { color: theme.tint }]}>{(student.name || "?")[0].toUpperCase()}</Text>
           </View>
-        </Pressable>
-      </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.modalName, { color: theme.text }]}>{student.name}</Text>
+            <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+              {student.rollNumber || student.email}
+              {student.roomNumber ? ` · Room ${student.roomNumber}` : ""}
+            </Text>
+          </View>
+          <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={12}>
+            <Feather name="x" size={22} color={theme.textSecondary} />
+          </Pressable>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+          {loadingState ? (
+            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+              <ActivityIndicator color={theme.tint} size="large" />
+              <Text style={[{ color: theme.textSecondary, marginTop: 12, fontFamily: "Inter_400Regular", fontSize: 14 }]}>Loading status...</Text>
+            </View>
+          ) : (
+            <>
+              {/* Status Overview */}
+              <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.statusRow}>
+                  <View style={[styles.statusDot, { backgroundColor: isCheckedOut ? "#6366f1" : isCheckedIn ? "#22c55e" : "#f59e0b" }]} />
+                  <Text style={[styles.statusText, { color: theme.text }]}>
+                    {isCheckedOut ? "Checked Out" : isCheckedIn ? "Checked In" : "Not Checked In"}
+                  </Text>
+                  {checkin?.checkInTime && (
+                    <Text style={[styles.statusTime, { color: theme.textSecondary }]}>In: {formatTime(checkin.checkInTime)}</Text>
+                  )}
+                  {checkin?.checkOutTime && (
+                    <Text style={[styles.statusTime, { color: theme.textSecondary }]}>Out: {formatTime(checkin.checkOutTime)}</Text>
+                  )}
+                </View>
+              </View>
+
+              {/* STEP 1: Check In */}
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>STEP 1 — CHECK IN</Text>
+              <View style={styles.stepRow}>
+                <StepButton
+                  label={isCheckedIn ? "Checked In" : isCheckedOut ? "Checked Out" : "Check In"}
+                  icon="log-in"
+                  done={isCheckedIn || isCheckedOut}
+                  disabled={isCheckedIn || isCheckedOut}
+                  onPress={checkIn}
+                  loading={actionLoading === "checkin"}
+                  theme={theme}
+                />
+              </View>
+
+              {/* STEP 2–4: Give Inventory */}
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>STEPS 2-4 — GIVE INVENTORY</Text>
+              <Text style={[styles.sectionHint, { color: theme.textTertiary }]}>
+                {!isCheckedIn ? "Check in the student first" : isCheckedOut ? "Student has checked out" : "Tap to give each item"}
+              </Text>
+              <View style={styles.stepRow}>
+                {(["mattress", "bedsheet", "pillow"] as const).map(item => (
+                  <StepButton
+                    key={`give-${item}`}
+                    label={item.charAt(0).toUpperCase() + item.slice(1)}
+                    icon={inv[item] ? "check-square" : "square"}
+                    done={inv[item]}
+                    disabled={!canGiveInventory}
+                    onPress={() => giveItem(item, !inv[item])}
+                    loading={actionLoading === `give-${item}`}
+                    theme={theme}
+                  />
+                ))}
+              </View>
+
+              {/* STEP 5–7: Submit Inventory */}
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>STEPS 5-7 — SUBMIT INVENTORY</Text>
+              <Text style={[styles.sectionHint, { color: theme.textTertiary }]}>
+                {!isCheckedIn ? "Check in first" : "Submit items that were given and returned"}
+              </Text>
+              <View style={styles.stepRow}>
+                {(["mattress", "bedsheet", "pillow"] as const).map(item => {
+                  const submitKey = `${item}Submitted` as "mattressSubmitted" | "bedsheetSubmitted" | "pillowSubmitted";
+                  const isGiven = inv[item];
+                  const isSubmitted = inv[submitKey];
+                  return (
+                    <StepButton
+                      key={`submit-${item}`}
+                      label={item.charAt(0).toUpperCase() + item.slice(1)}
+                      icon={isSubmitted ? "check-circle" : "upload"}
+                      done={isSubmitted}
+                      disabled={!isGiven || isSubmitted || !canGiveInventory}
+                      onPress={() => submitItem(item, true)}
+                      loading={actionLoading === `submit-${item}`}
+                      theme={theme}
+                    />
+                  );
+                })}
+              </View>
+              {!inv.mattress && !inv.bedsheet && !inv.pillow && isCheckedIn && (
+                <View style={[styles.hintBox, { backgroundColor: "#f59e0b10", borderColor: "#f59e0b30" }]}>
+                  <Feather name="info" size={13} color="#f59e0b" />
+                  <Text style={[styles.hintText, { color: theme.textSecondary }]}>No items given yet. Give items above to enable submission.</Text>
+                </View>
+              )}
+              {inv.mattress && inv.bedsheet && inv.pillow && !inv.inventoryLocked && isCheckedIn && (
+                <View style={[styles.hintBox, { backgroundColor: "#3b82f610", borderColor: "#3b82f630" }]}>
+                  <Feather name="info" size={13} color="#3b82f6" />
+                  <Text style={[styles.hintText, { color: theme.textSecondary }]}>Submit all given items to enable checkout.</Text>
+                </View>
+              )}
+              {inv.inventoryLocked && (
+                <View style={[styles.hintBox, { backgroundColor: "#22c55e10", borderColor: "#22c55e30" }]}>
+                  <Feather name="check-circle" size={13} color="#22c55e" />
+                  <Text style={[styles.hintText, { color: "#22c55e" }]}>All inventory submitted. Ready for checkout.</Text>
+                </View>
+              )}
+
+              {/* STEP 8: Check Out */}
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>STEP 8 — CHECK OUT</Text>
+              <View style={styles.stepRow}>
+                <StepButton
+                  label={isCheckedOut ? "Checked Out" : "Check Out"}
+                  icon="log-out"
+                  done={isCheckedOut}
+                  disabled={!canCheckOut || isCheckedOut}
+                  onPress={checkOut}
+                  loading={actionLoading === "checkout"}
+                  theme={theme}
+                />
+              </View>
+              {isCheckedIn && !inv.inventoryLocked && !isCheckedOut && (
+                <Text style={[styles.sectionHint, { color: theme.textTertiary }]}>Submit all given inventory to enable checkout</Text>
+              )}
+
+              {/* Clear Data */}
+              {(isCheckedIn || isCheckedOut) && (
+                <Pressable
+                  onPress={clearData}
+                  style={[styles.clearBtn, { borderColor: "#ef444460" }]}
+                >
+                  {actionLoading === "clear" ? (
+                    <ActivityIndicator color="#ef4444" size="small" />
+                  ) : (
+                    <>
+                      <Feather name="trash-2" size={14} color="#ef4444" />
+                      <Text style={[styles.clearBtnText, { color: "#ef4444" }]}>Clear All Data for Today</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </View>
     </Modal>
   );
 }
 
-// ─── Single Inventory Item Block ──────────────────────────────────────────────
+// ─── Student Row ────────────────────────────────────────────────────────────────
 
-const ITEM_META = {
-  mattress: { label: "Mattress", icon: "layers" as const, color: "#8b5cf6", darkBg: "#1e1033" },
-  bedsheet: { label: "Bedsheet", icon: "wind" as const,   color: "#06b6d4", darkBg: "#0c2233" },
-  pillow:   { label: "Pillow",   icon: "cloud" as const,  color: "#22c55e", darkBg: "#072015" },
-};
+function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: () => void }) {
+  const attColor = item.attendanceStatus === "entered" ? "#22c55e" : "#94a3b8";
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.studentRow, { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.82 : 1 }]}
+    >
+      <View style={[styles.avatar, { backgroundColor: theme.tint + "18" }]}>
+        <Text style={[styles.avatarText, { color: theme.tint }]}>{(item.name || "?").charAt(0).toUpperCase()}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+        <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+          {item.rollNumber || item.email}
+          {item.roomNumber ? ` · Room ${item.roomNumber}` : ""}
+        </Text>
+      </View>
+      <View style={{ alignItems: "flex-end", gap: 4 }}>
+        <View style={[styles.attBadge, { backgroundColor: attColor + "18" }]}>
+          <View style={[styles.attDot, { backgroundColor: attColor }]} />
+          <Text style={[styles.attLabel, { color: attColor }]}>
+            {item.attendanceStatus === "entered" ? "In" : "Out"}
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={14} color={theme.textTertiary} />
+      </View>
+    </Pressable>
+  );
+}
 
-type InvField = keyof typeof ITEM_META;
+// ─── Student Self View ─────────────────────────────────────────────────────────
 
-function InventoryItemBlock({
-  field, given, submitted, locked, isToggling, isSubmitting, index,
-  onToggle, onSubmit,
-}: {
-  field: InvField; given: boolean; submitted: boolean; locked: boolean;
-  isToggling: boolean; isSubmitting: boolean; index: number;
-  onToggle: () => void; onSubmit: () => void;
-}) {
-  const meta = ITEM_META[field];
-  const scale = useSharedValue(1);
-  const checkScale = useSharedValue(submitted || given ? 1 : 0);
-  const submitScale = useSharedValue(given && !submitted ? 1 : 0);
+function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: any; request: any; topPad: number }) {
+  const [state, setState] = useState<CheckinState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (given) {
-      scale.value = withSequence(
-        withSpring(1.08, { damping: 6, stiffness: 280 }),
-        withSpring(1, { damping: 12, stiffness: 200 })
-      );
-      checkScale.value = withDelay(80, withSpring(1, { damping: 10, stiffness: 250 }));
-    }
-  }, [given]);
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const data = await request(`/checkins/${user.id}/today`);
+      setState(data);
+    } catch { }
+    setLoading(false);
+  }, [user, request]);
 
-  useEffect(() => {
-    if (given && !submitted) {
-      submitScale.value = withDelay(200, withSpring(1, { damping: 10, stiffness: 200 }));
-    } else if (submitted) {
-      submitScale.value = withTiming(0, { duration: 200 });
-      checkScale.value = withSpring(1, { damping: 8, stiffness: 200 });
-    }
-  }, [given, submitted]);
+  useEffect(() => { load(); }, [load]);
 
-  const cardAnim = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const submitAnim = useAnimatedStyle(() => ({
-    transform: [{ scaleY: submitScale.value }, { scale: submitScale.value }],
-    opacity: submitScale.value,
-    maxHeight: interpolate(submitScale.value, [0, 1], [0, 52], Extrapolation.CLAMP),
-    overflow: "hidden" as const,
-  }));
+  const checkin = state?.checkin;
+  const inv = state?.inventory;
+  const isIn = !!checkin && !checkin?.checkOutTime;
+  const isOut = !!checkin?.checkOutTime;
 
-  const borderColor = submitted ? meta.color + "80" : given ? meta.color + "40" : "#1a2a45";
-  const bgColor = submitted ? meta.darkBg : given ? meta.darkBg + "aa" : "#0b1728";
+  const items = [
+    { key: "mattress", given: inv?.mattress, submitted: inv?.mattressSubmitted },
+    { key: "bedsheet", given: inv?.bedsheet, submitted: inv?.bedsheetSubmitted },
+    { key: "pillow", given: inv?.pillow, submitted: inv?.pillowSubmitted },
+  ];
 
   return (
-    <Animated.View
-      entering={FadeInDown.delay(index * 90).springify().damping(14)}
-      style={[S.invItemWrapper, cardAnim]}
-    >
-      {/* Toggle chip */}
-      <Pressable
-        onPress={() => !given && !submitted && !locked && !isToggling && onToggle()}
-        disabled={given || submitted || locked || isToggling}
-        style={({ pressed }) => [
-          S.invItemCard,
-          { borderColor, backgroundColor: bgColor, opacity: pressed && !given ? 0.8 : 1 },
-        ]}
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+        <Text style={[styles.pageTitle, { color: theme.text }]}>Attendance</Text>
+        <Text style={[styles.pageSubtitle, { color: theme.textSecondary }]}>Today's status</Text>
+      </View>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       >
-        {/* Glow overlay when given */}
-        {given && (
-          <Animated.View entering={FadeIn.duration(300)} style={[StyleSheet.absoluteFill, { borderRadius: 14, overflow: "hidden" }]}>
-            <LinearGradient
-              colors={[meta.color + "18", meta.color + "06"]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            />
-          </Animated.View>
-        )}
-
-        {/* Icon */}
-        <View style={[S.invItemIcon, { backgroundColor: meta.color + "20" }]}>
-          {isToggling
-            ? <ActivityIndicator size="small" color={meta.color} />
-            : submitted
-              ? <Animated.View entering={ZoomIn.springify().damping(8)}><Feather name="check-circle" size={18} color={meta.color} /></Animated.View>
-              : <Feather name={given ? "check-circle" : meta.icon} size={18} color={given ? meta.color : "#334155"} />}
-        </View>
-
-        {/* Label */}
-        <Text style={[S.invItemLabel, { color: given ? meta.color : "#475569" }]}>{meta.label}</Text>
-
-        {/* State badge */}
-        {submitted
-          ? <Animated.View entering={ZoomIn.springify().damping(8)} style={[S.itemBadge, { backgroundColor: meta.color + "20", borderColor: meta.color + "50" }]}>
-              <Feather name="lock" size={9} color={meta.color} />
-              <Text style={[S.itemBadgeText, { color: meta.color }]}>Done</Text>
-            </Animated.View>
-          : given
-            ? <View style={[S.itemBadge, { backgroundColor: "#ffffff12", borderColor: "#ffffff20" }]}>
-                <Feather name="check" size={9} color="#94a3b8" />
-                <Text style={[S.itemBadgeText, { color: "#94a3b8" }]}>Given</Text>
-              </View>
-            : <View style={[S.itemBadge, { backgroundColor: "#0a1628", borderColor: "#1e2d4a" }]}>
-                <Feather name="circle" size={9} color="#334155" />
-                <Text style={[S.itemBadgeText, { color: "#334155" }]}>None</Text>
-              </View>}
-      </Pressable>
-
-      {/* Submit button — animates in after item is given */}
-      <Animated.View style={submitAnim}>
-        <Pressable
-          onPress={onSubmit}
-          disabled={isSubmitting || !given || submitted}
-          style={({ pressed }) => [S.invSubmitBtn, { borderColor: meta.color + "70", opacity: pressed || isSubmitting ? 0.75 : 1 }]}
-        >
-          <LinearGradient
-            colors={[meta.color + "cc", meta.color]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={S.invSubmitBtnGrad}
-          >
-            {isSubmitting
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <><Feather name="send" size={11} color="#fff" /><Text style={S.invSubmitBtnText}>Submit {meta.label}</Text></>}
-          </LinearGradient>
-        </Pressable>
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
-// ─── Attendance Card ──────────────────────────────────────────────────────────
-
-function AttendanceCard({
-  item, checkin, updatingId, updatingInv, checkingInId,
-  checkingOutId, submittingInvItem,
-  onToggleAttendance, onCheckIn, onToggleInventory, onSubmitItem, onCheckOut,
-}: any) {
-  const inv = item.inventory || {
-    mattress: false, bedsheet: false, pillow: false,
-    mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
-    inventoryLocked: false,
-  };
-  const isEntered = item.attendance?.status === "entered";
-  const isUpdating = updatingId === item.id;
-  const isCheckingIn = checkingInId === item.id;
-  const isCheckingOut = checkingOutId === checkin?.id;
-  const isLocked = !!inv.inventoryLocked;
-  const isCheckedIn = !!checkin && !checkin.checkOutTime;
-  const isCheckedOut = !!checkin?.checkOutTime;
-  const allSubmitted = inv.mattressSubmitted && inv.bedsheetSubmitted && inv.pillowSubmitted;
-
-  // Animate the inventory section open when checked in
-  const invOpen = useSharedValue(0);
-  useEffect(() => {
-    invOpen.value = isCheckedIn && !isCheckedOut
-      ? withDelay(150, withSpring(1, { damping: 16, stiffness: 100 }))
-      : withTiming(0, { duration: 250 });
-  }, [isCheckedIn, isCheckedOut]);
-
-  const invSectionStyle = useAnimatedStyle(() => ({
-    opacity: invOpen.value,
-    maxHeight: interpolate(invOpen.value, [0, 1], [0, 420], Extrapolation.CLAMP),
-    overflow: "hidden" as const,
-    transform: [{ scaleY: interpolate(invOpen.value, [0, 1], [0.85, 1], Extrapolation.CLAMP) }],
-  }));
-
-  // Checkout button bounce in when all submitted
-  const checkoutScale = useSharedValue(0);
-  useEffect(() => {
-    if (allSubmitted || isLocked) {
-      checkoutScale.value = withDelay(200, withSpring(1, { damping: 10, stiffness: 180 }));
-    }
-  }, [allSubmitted, isLocked]);
-
-  const checkoutBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: checkoutScale.value }],
-    opacity: checkoutScale.value,
-  }));
-
-  const borderCol = isCheckedOut ? "#f59e0b30"
-    : isLocked ? "#22c55e35"
-    : isCheckedIn ? "#8b5cf630"
-    : "#111e35";
-
-  return (
-    <Animated.View
-      entering={FadeInDown.springify().damping(15).stiffness(80)}
-      style={[S.card, { borderColor: borderCol }]}
-    >
-      {/* Card dark gradient bg */}
-      <LinearGradient
-        colors={["#0d1b33", "#08111f"]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-      />
-
-      {/* ── Top: Student identity + campus status ── */}
-      <View style={S.cardTop}>
-        <View style={[S.avatar, { backgroundColor: isEntered ? "#14532d30" : "#1e3a5f30" }]}>
-          <Text style={[S.avatarLetter, { color: isEntered ? "#22c55e" : "#60a5fa" }]}>
-            {(item.name || "?")[0].toUpperCase()}
-          </Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-            <Text style={S.studentName} numberOfLines={1}>{item.name}</Text>
-            {/* Campus In/Out toggle — Button implicit #1 context */}
-            <Pressable
-              onPress={() => !isEntered && !isUpdating && onToggleAttendance(item.id, item.attendance?.status || "not_entered")}
-              disabled={isEntered || isUpdating}
-              style={[S.campusPill, {
-                backgroundColor: isEntered ? "#14532d30" : "#78350f25",
-                borderColor: isEntered ? "#22c55e50" : "#f59e0b50",
-              }]}
-            >
-              {isUpdating
-                ? <ActivityIndicator size="small" color="#f59e0b" style={{ width: 22 }} />
-                : <><View style={[S.campusDot, { backgroundColor: isEntered ? "#22c55e" : "#f59e0b" }]} />
-                  <Text style={[S.campusPillText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>
-                    {isEntered ? "In ✓" : "Out"}
-                  </Text></>}
-            </Pressable>
-          </View>
-          <Text style={S.studentMeta}>
-            {item.roomNumber ? `Room ${item.roomNumber}` : item.email}
-          </Text>
-        </View>
-        {/* Status badge */}
-        {checkin && (
-          isLocked
-            ? <Animated.View entering={ZoomIn.springify().damping(9)} style={S.badgeGreen}>
-                <Feather name="check-circle" size={11} color="#22c55e" />
-                <Text style={S.badgeGreenText}>All Done</Text>
-              </Animated.View>
-            : <View style={S.badgeRed}>
-                <Feather name="alert-circle" size={11} color="#ef4444" />
-                <Text style={S.badgeRedText}>
-                  {allSubmitted ? "Locking…" : "Pending"}
+        {loading ? (
+          <CardSkeleton />
+        ) : (
+          <>
+            {/* Status card */}
+            <View style={[styles.selfStatusCard, { backgroundColor: isOut ? "#6366f115" : isIn ? "#22c55e15" : theme.surface, borderColor: isOut ? "#6366f140" : isIn ? "#22c55e40" : theme.border }]}>
+              <Feather name={isOut ? "log-out" : isIn ? "log-in" : "clock"} size={28} color={isOut ? "#6366f1" : isIn ? "#22c55e" : "#f59e0b"} />
+              <Text style={[styles.selfStatusText, { color: isOut ? "#6366f1" : isIn ? "#22c55e" : "#f59e0b" }]}>
+                {isOut ? "Checked Out" : isIn ? "Checked In" : "Not Checked In Today"}
+              </Text>
+              {checkin?.checkInTime && (
+                <Text style={[styles.selfStatusSub, { color: theme.textSecondary }]}>
+                  In: {new Date(checkin.checkInTime).toLocaleTimeString("en-IN", { hour12: true, hour: "2-digit", minute: "2-digit" })}
+                  {checkin.checkOutTime ? ` · Out: ${new Date(checkin.checkOutTime).toLocaleTimeString("en-IN", { hour12: true, hour: "2-digit", minute: "2-digit" })}` : ""}
                 </Text>
-              </View>
-        )}
-      </View>
-
-      {/* ══════════════════════════════════════════
-          BUTTON 1: CHECK IN
-         ══════════════════════════════════════════ */}
-      <View style={S.actionRow}>
-        <View style={[S.actionIconBox, { backgroundColor: checkin ? "#8b5cf620" : "#111e35" }]}>
-          <Feather name="log-in" size={14} color={checkin ? "#8b5cf6" : "#334155"} />
-        </View>
-        {checkin ? (
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={S.rowLabel}>Check-in</Text>
-            <Text style={[S.rowTime, { color: "#8b5cf6" }]}>{formatTime(checkin.checkInTime)}</Text>
-          </View>
-        ) : (
-          <>
-            <Text style={[S.rowHint, { flex: 1 }]}>Not checked in yet</Text>
-            <Pressable onPress={() => onCheckIn(item.id)} disabled={isCheckingIn}
-              style={({ pressed }) => [S.actionBtn, { opacity: pressed || isCheckingIn ? 0.75 : 1 }]}>
-              <LinearGradient colors={["#6d28d9", "#8b5cf6"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={S.actionBtnGrad}>
-                {isCheckingIn ? <ActivityIndicator size="small" color="#fff" />
-                  : <><Feather name="log-in" size={13} color="#fff" /><Text style={S.actionBtnText}>Check In</Text></>}
-              </LinearGradient>
-            </Pressable>
-          </>
-        )}
-      </View>
-
-      {/* ══════════════════════════════════════════
-          BUTTONS 2–4: INVENTORY TOGGLE CHIPS
-          BUTTONS 5–7: INDIVIDUAL SUBMIT BUTTONS
-         ══════════════════════════════════════════ */}
-      {isCheckedIn && !isCheckedOut && (
-        <Animated.View style={[S.invSection, invSectionStyle]}>
-          {/* Section header */}
-          <View style={S.invHeader}>
-            <Feather name={isLocked ? "lock" : "package"} size={12} color={isLocked ? "#22c55e" : "#475569"} />
-            <Text style={[S.invHeaderText, { color: isLocked ? "#22c55e" : "#475569" }]}>
-              {isLocked ? "Inventory Submitted & Locked" : "Inventory — Give & Submit Each Item"}
-            </Text>
-          </View>
-
-          {/* 3 item blocks side by side */}
-          <View style={S.invRow}>
-            {(["mattress", "bedsheet", "pillow"] as InvField[]).map((field, idx) => (
-              <InventoryItemBlock
-                key={field}
-                field={field}
-                index={idx}
-                given={!!inv[field]}
-                submitted={!!inv[`${field}Submitted`]}
-                locked={isLocked}
-                isToggling={updatingInv === `${item.id}-${field}`}
-                isSubmitting={submittingInvItem === `${item.id}-${field}`}
-                onToggle={() => onToggleInventory(item.id, field)}
-                onSubmit={() => onSubmitItem(item.id, field)}
-              />
-            ))}
-          </View>
-
-          {/* Progress bar */}
-          <View style={S.progressWrap}>
-            <View style={S.progressBar}>
-              <Animated.View style={[
-                S.progressFill,
-                { width: `${((+!!inv.mattressSubmitted + +!!inv.bedsheetSubmitted + +!!inv.pillowSubmitted) / 3) * 100}%` }
-              ]} />
+              )}
             </View>
-            <Text style={S.progressLabel}>
-              {+!!inv.mattressSubmitted + +!!inv.bedsheetSubmitted + +!!inv.pillowSubmitted}/3 submitted
-            </Text>
-          </View>
-        </Animated.View>
-      )}
 
-      {/* ══════════════════════════════════════════
-          BUTTON 8: CHECK OUT
-         ══════════════════════════════════════════ */}
-      <View style={[S.actionRow, { borderTopColor: "#0e1d33" }]}>
-        <View style={[S.actionIconBox, { backgroundColor: isCheckedOut ? "#f59e0b18" : "#111e35" }]}>
-          <Feather name="log-out" size={14} color={isCheckedOut ? "#f59e0b" : "#334155"} />
-        </View>
-        {isCheckedOut ? (
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={S.rowLabel}>Checked out</Text>
-            <Text style={[S.rowTime, { color: "#f59e0b" }]}>{formatTime(checkin.checkOutTime)}</Text>
-          </View>
-        ) : checkin ? (
-          <>
-            <Text style={[S.rowHint, { flex: 1, color: isLocked ? "#475569" : "#ef444480" }]}>
-              {isLocked ? "Ready to check out" : "Submit all items to enable"}
-            </Text>
-            <Animated.View style={isLocked ? checkoutBtnStyle : {}}>
-              <Pressable
-                onPress={() => onCheckOut(checkin.id, item.id, inv)}
-                disabled={isCheckingOut || !isLocked}
-                style={({ pressed }) => [
-                  S.checkOutBtn,
-                  {
-                    backgroundColor: isLocked ? "#f59e0b" : "#1a2a3f",
-                    borderColor: isLocked ? "#d97706" : "#1e2d4a",
-                    opacity: pressed || isCheckingOut ? 0.75 : 1,
-                  }
-                ]}
-              >
-                {isCheckingOut ? <ActivityIndicator size="small" color="#fff" />
-                  : <><Feather name="log-out" size={13} color={isLocked ? "#fff" : "#334155"} />
-                    <Text style={[S.checkOutBtnText, { color: isLocked ? "#fff" : "#334155" }]}>Check Out</Text></>}
-              </Pressable>
-            </Animated.View>
-          </>
-        ) : (
-          <Text style={[S.rowHint, { flex: 1 }]}>Check in first</Text>
-        )}
-      </View>
-    </Animated.View>
-  );
-}
-
-// ─── Room Attendance View ──────────────────────────────────────────────────────
-
-function RoomAttendanceView({ theme }: { theme: any }) {
-  const request = useApiRequest();
-  const qc = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [updatingInv, setUpdatingInv] = useState<string | null>(null);
-  const [checkingInId, setCheckingInId] = useState<string | null>(null);
-  const [checkingOutId, setCheckingOutId] = useState<string | null>(null);
-  const [submittingInvItem, setSubmittingInvItem] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const today = new Date().toISOString().split("T")[0];
-
-  const { data = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ["attendance", today],
-    queryFn: () => request("/attendance"),
-    refetchInterval: 8000,
-    staleTime: 4000,
-  });
-
-  const { data: todayCheckins = [], refetch: refetchCheckins } = useQuery<any[]>({
-    queryKey: ["checkins-today"],
-    queryFn: () => request("/checkins?limit=300"),
-    refetchInterval: 8000,
-    staleTime: 4000,
-  });
-
-  const checkinMap: Record<string, any> = {};
-  (todayCheckins as any[]).forEach(c => { if (c.studentId) checkinMap[c.studentId] = c; });
-
-  const markMutation = useMutation({
-    mutationFn: ({ studentId, status }: any) =>
-      request(`/attendance/${studentId}`, { method: "POST", body: JSON.stringify({ status }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
-  });
-
-  const invMutation = useMutation({
-    mutationFn: ({ studentId, field }: any) =>
-      request(`/attendance/inventory/${studentId}`, { method: "PATCH", body: JSON.stringify({ [field]: true }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
-  });
-
-  const submitItemMutation = useMutation({
-    mutationFn: ({ studentId, item }: any) =>
-      request(`/attendance/inventory/${studentId}/submit-item`, { method: "POST", body: JSON.stringify({ item }) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-      qc.invalidateQueries({ queryKey: ["checkins-today"] });
-    },
-  });
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([refetch(), refetchCheckins()]);
-    setRefreshing(false);
-  }, [refetch, refetchCheckins]);
-
-  const handleToggleAttendance = useCallback(async (studentId: string, current: string) => {
-    if (current === "entered") return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setUpdatingId(studentId);
-    try { await markMutation.mutateAsync({ studentId, status: "entered" }); } catch { }
-    setUpdatingId(null);
-  }, [markMutation]);
-
-  const handleToggleInventory = useCallback(async (studentId: string, field: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setUpdatingInv(`${studentId}-${field}`);
-    try { await invMutation.mutateAsync({ studentId, field }); } catch { }
-    setUpdatingInv(null);
-  }, [invMutation]);
-
-  const handleSubmitItem = useCallback(async (studentId: string, item: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setSubmittingInvItem(`${studentId}-${item}`);
-    try {
-      await submitItemMutation.mutateAsync({ studentId, item });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { Alert.alert("Error", e.message || "Failed"); }
-    setSubmittingInvItem(null);
-  }, [submitItemMutation]);
-
-  const handleCheckIn = useCallback(async (studentId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCheckingInId(studentId);
-    try {
-      await request(`/checkins/${studentId}`, { method: "POST" });
-      qc.invalidateQueries({ queryKey: ["checkins-today"] });
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { Alert.alert("Error", e.message || "Failed to check in"); }
-    setCheckingInId(null);
-  }, [request, qc]);
-
-  const handleCheckOut = useCallback(async (checkinId: string, studentId: string, inv: any) => {
-    if (!inv?.inventoryLocked) {
-      Alert.alert("Cannot Check Out", "Please submit all inventory items first.");
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setCheckingOutId(checkinId);
-    try {
-      await request(`/checkins/${checkinId}/checkout`, { method: "PATCH" });
-      qc.invalidateQueries({ queryKey: ["checkins-today"] });
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { Alert.alert("Error", e.message || "Failed to check out"); }
-    setCheckingOutId(null);
-  }, [request, qc]);
-
-  const sq = search.trim().toLowerCase();
-  const filtered = sq
-    ? (data as any[]).filter(s =>
-        s.name?.toLowerCase().includes(sq) ||
-        s.roomNumber?.toLowerCase().includes(sq) ||
-        s.rollNumber?.toLowerCase().includes(sq))
-    : (data as any[]);
-
-  const entered = (data as any[]).filter(s => s.attendance?.status === "entered").length;
-  const checkedIn = Object.values(checkinMap).filter((c: any) => !c.checkOutTime).length;
-  const invDone = (data as any[]).filter(s => s.inventory?.inventoryLocked).length;
-
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Stats */}
-      <View style={S.statsRow}>
-        {[
-          { label: "Total", val: data.length, color: "#cbd5e1" },
-          { label: "In Campus", val: entered, color: "#22c55e" },
-          { label: "Checked In", val: checkedIn, color: "#8b5cf6" },
-          { label: "Inv Done", val: invDone, color: "#06b6d4" },
-        ].map(p => (
-          <View key={p.label} style={S.statPill}>
-            <Text style={[S.statVal, { color: p.color }]}>{p.val}</Text>
-            <Text style={S.statLabel}>{p.label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Search */}
-      <View style={S.searchRow}>
-        <Feather name="search" size={14} color="#334155" />
-        <TextInput
-          placeholder="Search name, room, roll…"
-          placeholderTextColor="#1e2d4a"
-          value={search}
-          onChangeText={setSearch}
-          style={S.searchInput}
-          clearButtonMode="while-editing"
-        />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")}>
-            <Feather name="x-circle" size={14} color="#334155" />
-          </Pressable>
-        )}
-      </View>
-
-      {isLoading ? (
-        <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: 12, paddingBottom: 120, gap: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />}
-          ListEmptyComponent={() => (
-            <View style={S.empty}>
-              <Feather name="users" size={44} color="#111e35" />
-              <Text style={S.emptyText}>{search ? "No students match" : "No students assigned"}</Text>
-            </View>
-          )}
-          renderItem={({ item }) => (
-            <AttendanceCard
-              item={item}
-              checkin={checkinMap[item.id]}
-              updatingId={updatingId}
-              updatingInv={updatingInv}
-              checkingInId={checkingInId}
-              checkingOutId={checkingOutId}
-              submittingInvItem={submittingInvItem}
-              onToggleAttendance={handleToggleAttendance}
-              onCheckIn={handleCheckIn}
-              onToggleInventory={handleToggleInventory}
-              onSubmitItem={handleSubmitItem}
-              onCheckOut={handleCheckOut}
-            />
-          )}
-        />
-      )}
-    </View>
-  );
-}
-
-// ─── Mess Card View ────────────────────────────────────────────────────────────
-
-function MessAttendanceView({ theme }: { theme: any }) {
-  const request = useApiRequest();
-  const qc = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const today = new Date().toISOString().split("T")[0];
-
-  const { data: students = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ["attendance", today],
-    queryFn: () => request("/attendance"),
-    refetchInterval: 8000,
-    staleTime: 4000,
-  });
-
-  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
-
-  const toggleMessCard = async (studentId: string, current: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTogglingId(studentId);
-    try {
-      await request(`/attendance/mess-card/${studentId}`, { method: "PATCH", body: JSON.stringify({ messCard: !current }) });
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) { Alert.alert("Error", e.message || "Failed"); }
-    setTogglingId(null);
-  };
-
-  const sq = search.trim().toLowerCase();
-  const filtered = sq
-    ? (students as any[]).filter(s =>
-        s.name?.toLowerCase().includes(sq) ||
-        s.roomNumber?.toLowerCase().includes(sq) ||
-        s.rollNumber?.toLowerCase().includes(sq))
-    : (students as any[]);
-
-  const givenCount = (students as any[]).filter(s => s.inventory?.messCard).length;
-
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={S.statsRow}>
-        {[
-          { label: "Total", val: students.length, color: "#cbd5e1" },
-          { label: "Given", val: givenCount, color: "#22c55e" },
-          { label: "Pending", val: students.length - givenCount, color: "#f59e0b" },
-        ].map(p => (
-          <View key={p.label} style={S.statPill}>
-            <Text style={[S.statVal, { color: p.color }]}>{p.val}</Text>
-            <Text style={S.statLabel}>{p.label}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={S.searchRow}>
-        <Feather name="search" size={14} color="#334155" />
-        <TextInput placeholder="Search…" placeholderTextColor="#1e2d4a" value={search}
-          onChangeText={setSearch} style={S.searchInput} clearButtonMode="while-editing" />
-      </View>
-      {isLoading ? <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View> : (
-        <FlatList
-          data={filtered}
-          keyExtractor={item => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22c55e" />}
-          contentContainerStyle={{ padding: 10, paddingBottom: 120, gap: 8 }}
-          ListEmptyComponent={() => (
-            <View style={S.empty}>
-              <Feather name="coffee" size={40} color="#111e35" />
-              <Text style={S.emptyText}>{search ? "No students match" : "No students assigned"}</Text>
-            </View>
-          )}
-          renderItem={({ item }) => {
-            const given = !!item.inventory?.messCard;
-            const givenAt = item.inventory?.messCardGivenAt;
-            const isToggling = togglingId === item.id;
-            return (
-              <Animated.View entering={FadeInDown.springify().damping(15)} style={S.messRow}>
-                <LinearGradient colors={given ? ["#052e16", "#064e3b"] : ["#0d1b33", "#08111f"]}
-                  style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-                <View style={[S.avatar, { backgroundColor: given ? "#22c55e20" : "#1e6fd920" }]}>
-                  <Text style={[S.avatarLetter, { color: given ? "#22c55e" : "#60a5fa" }]}>
-                    {(item.name || "?")[0].toUpperCase()}
+            {/* Inventory */}
+            <Text style={[styles.selfSection, { color: theme.text }]}>My Inventory</Text>
+            <View style={styles.invRow}>
+              {items.map(({ key, given, submitted }) => (
+                <View key={key} style={[styles.invCard, {
+                  backgroundColor: submitted ? "#22c55e15" : given ? theme.tint + "15" : theme.surface,
+                  borderColor: submitted ? "#22c55e40" : given ? theme.tint + "40" : theme.border,
+                }]}>
+                  <Feather
+                    name={submitted ? "check-circle" : given ? "package" : "circle"}
+                    size={22}
+                    color={submitted ? "#22c55e" : given ? theme.tint : theme.textTertiary}
+                  />
+                  <Text style={[styles.invCardLabel, { color: submitted ? "#22c55e" : given ? theme.tint : theme.textSecondary }]}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </Text>
+                  <Text style={[styles.invCardStatus, { color: submitted ? "#22c55e" : given ? theme.tint : theme.textTertiary }]}>
+                    {submitted ? "Returned" : given ? "Given" : "—"}
                   </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={S.studentName}>{item.name}</Text>
-                  <Text style={S.studentMeta}>{item.roomNumber ? `Room ${item.roomNumber}` : item.email}</Text>
-                  {given && givenAt && <Text style={[S.studentMeta, { color: "#22c55e" }]}>Given {formatTime(givenAt)}</Text>}
-                </View>
-                <Pressable onPress={() => !isToggling && toggleMessCard(item.id, given)} disabled={isToggling}
-                  style={({ pressed }) => [S.messBtn, {
-                    backgroundColor: given ? "#ef444415" : "#22c55e",
-                    borderColor: given ? "#ef444440" : "#22c55e",
-                    borderWidth: given ? 1 : 0, opacity: pressed ? 0.8 : 1,
-                  }]}>
-                  {isToggling ? <ActivityIndicator size="small" color={given ? "#ef4444" : "#fff"} />
-                    : given
-                      ? <><Feather name="x-circle" size={14} color="#ef4444" /><Text style={[S.messBtnText, { color: "#ef4444" }]}>Revoke</Text></>
-                      : <><Feather name="check" size={14} color="#fff" /><Text style={[S.messBtnText, { color: "#fff" }]}>Give Card</Text></>}
-                </Pressable>
-              </Animated.View>
-            );
-          }}
-        />
-      )}
+              ))}
+            </View>
+            {!isIn && !isOut && (
+              <View style={[styles.hintBox, { backgroundColor: theme.surface, borderColor: theme.border, marginTop: 12 }]}>
+                <Feather name="info" size={13} color={theme.textTertiary} />
+                <Text style={[styles.hintText, { color: theme.textSecondary }]}>Your volunteer will check you in when you arrive at the hostel.</Text>
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-// ─── Main Screen ───────────────────────────────────────────────────────────────
+// ─── Main Screen ────────────────────────────────────────────────────────────────
 
-export default function AttendanceScreen() {
+export default function AttendanceTab() {
   const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
+  const isDark = colorScheme === "dark";
+  const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
+
+  const { user, isStudent } = useAuth();
   const request = useApiRequest();
-  const qc = useQueryClient();
-  const [tab, setTab] = useState<"room" | "mess">("room");
-  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [allStudents, setAllStudents] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  const fetchStudents = useCallback(async (reset = false) => {
+    if (isStudent) return;
+    if (!hasMore && !reset) return;
+    const offset = reset ? 0 : page * PAGE_SIZE;
+    if (reset) { setAllStudents([]); setHasMore(true); }
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+      if (search.trim()) params.set("search", search.trim());
+      const data = await request(`/students?${params}`);
+      const list: any[] = Array.isArray(data) ? data : (data.students || data.data || []);
+      setAllStudents(prev => reset ? list : [...prev, ...list]);
+      setHasMore(list.length === PAGE_SIZE);
+      if (!reset) setPage(p => p + 1);
+      else setPage(1);
+    } catch { }
+    setLoading(false);
+  }, [isStudent, request, search, page, hasMore]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchStudents(true);
+    setRefreshing(false);
+  }, [fetchStudents]);
+
+  useEffect(() => { if (!isStudent) fetchStudents(true); }, [isStudent, search]);
+
+  if (isStudent) {
+    return <StudentSelfView theme={theme} user={user} request={request} topPad={topPad} />;
+  }
 
   return (
-    <View style={[S.screen, { backgroundColor: "#060e1a" }]}>
-      <View style={[S.header, { paddingTop: topPad }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={S.headerTitle}>Attendance</Text>
-          <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowNotifModal(true); }}
-            style={S.notifBtn}
-          >
-            <Feather name="bell" size={15} color="#f59e0b" />
-            <Text style={S.notifBtnText}>Notify</Text>
-          </Pressable>
+          <Text style={[styles.pageTitle, { color: theme.text }]}>Attendance</Text>
+          {allStudents.length > 0 && (
+            <View style={[styles.countBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
+              <Text style={[styles.countText, { color: theme.tint }]}>{allStudents.length}{hasMore ? "+" : ""}</Text>
+            </View>
+          )}
         </View>
-
-        {/* Tab switcher */}
-        <View style={S.tabBar}>
-          {(["room", "mess"] as const).map(t => {
-            const active = tab === t;
-            const label = t === "room" ? "Room / Inventory" : "Mess Card";
-            const icon = t === "room" ? "home" : "coffee";
-            const color = t === "room" ? ["#1d4ed8", "#3b82f6"] : ["#15803d", "#22c55e"];
-            return (
-              <Pressable key={t} onPress={() => { setTab(t); Haptics.selectionAsync(); }}
-                style={[S.tabBtn, active && S.tabBtnActive]}>
-                {active && <LinearGradient colors={color as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />}
-                <Feather name={icon as any} size={13} color={active ? "#fff" : "#334155"} />
-                <Text style={[S.tabBtnText, { color: active ? "#fff" : "#334155" }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
+        <View style={[styles.searchBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Feather name="search" size={15} color={theme.textSecondary} />
+          <TextInput
+            placeholder="Search by name, room, roll…"
+            placeholderTextColor={theme.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            style={[styles.searchInput, { color: theme.text }]}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+              <Feather name="x-circle" size={15} color={theme.textSecondary} />
+            </Pressable>
+          )}
         </View>
       </View>
 
-      {tab === "room" ? <RoomAttendanceView theme={theme} /> : <MessAttendanceView theme={theme} />}
+      <FlatList
+        data={allStudents}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ padding: 14, paddingBottom: 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
+        onEndReached={() => hasMore && !loading && fetchStudents()}
+        onEndReachedThreshold={0.4}
+        renderItem={({ item }) => (
+          <StudentRow
+            item={item}
+            theme={theme}
+            onPress={() => { Haptics.selectionAsync(); setSelectedStudent(item); }}
+          />
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        ListEmptyComponent={() => loading ? (
+          <View style={{ padding: 20 }}>
+            <CardSkeleton /><CardSkeleton /><CardSkeleton />
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Feather name="users" size={48} color={theme.textTertiary} />
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No students found</Text>
+          </View>
+        )}
+        ListFooterComponent={() => loading && allStudents.length > 0 ? (
+          <ActivityIndicator color={theme.tint} style={{ marginVertical: 16 }} />
+        ) : null}
+      />
 
-      <NotificationModal visible={showNotifModal} onClose={() => setShowNotifModal(false)}
-        theme={theme} request={request} qc={qc} />
+      <AttendanceModal
+        student={selectedStudent}
+        visible={!!selectedStudent}
+        onClose={() => setSelectedStudent(null)}
+        theme={theme}
+        request={request}
+        onDataChanged={() => fetchStudents(true)}
+      />
     </View>
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
-
-const S = StyleSheet.create({
-  screen: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#0e1d33", gap: 12 },
-  headerTitle: { fontSize: 26, fontFamily: "Inter_700Bold", color: "#f1f5f9" },
-  notifBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: "#f59e0b18", borderWidth: 1, borderColor: "#f59e0b40" },
-  notifBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#f59e0b" },
-  tabBar: { flexDirection: "row", borderRadius: 12, borderWidth: 1, borderColor: "#0e1d33", padding: 4, gap: 4, backgroundColor: "#091525" },
-  tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 9, overflow: "hidden" },
-  tabBtnActive: {},
-  tabBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-
-  statsRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: "#0e1d33" },
-  statPill: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, gap: 1, backgroundColor: "#0b1728" },
-  statVal: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: "#334155" },
-
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#0e1d33" },
-  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0, color: "#94a3b8" },
-
-  // Card
-  card: { borderRadius: 16, borderWidth: 1.5, overflow: "hidden" },
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 10, padding: 13 },
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  pageHeader: { paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  pageTitle: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  pageSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  countBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
+  countText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+  studentRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  avatarLetter: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  studentName: { fontSize: 13, fontFamily: "Inter_700Bold", color: "#f1f5f9" },
-  studentMeta: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#334155", marginTop: 1 },
-  campusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
-  campusDot: { width: 6, height: 6, borderRadius: 3 },
-  campusPillText: { fontSize: 11, fontFamily: "Inter_700Bold" },
-  badgeGreen: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#14532d40", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: "#22c55e40" },
-  badgeGreenText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#22c55e" },
-  badgeRed: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#7f1d1d30", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: "#ef444440" },
-  badgeRedText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#ef4444" },
-
-  // Action rows
-  actionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#0e1d33" },
-  actionIconBox: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  rowLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#475569" },
-  rowTime: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  rowHint: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#1e2d4a" },
-  actionBtn: { borderRadius: 10, overflow: "hidden" },
-  actionBtnGrad: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 13, paddingVertical: 9 },
-  actionBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
-
-  // Inventory section
-  invSection: { paddingHorizontal: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#0e1d33", gap: 10 },
-  invHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-  invHeaderText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  invRow: { flexDirection: "row", gap: 8 },
-
-  // Per-item block
-  invItemWrapper: { flex: 1, gap: 6 },
-  invItemCard: { borderRadius: 14, borderWidth: 1.5, padding: 10, alignItems: "center", gap: 7, overflow: "hidden", minHeight: 100 },
-  invItemIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  invItemLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center" },
-  itemBadge: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, borderWidth: 1 },
-  itemBadgeText: { fontSize: 9, fontFamily: "Inter_700Bold" },
-  invSubmitBtn: { borderRadius: 10, overflow: "hidden", borderWidth: 1 },
-  invSubmitBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 9 },
-  invSubmitBtnText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-
-  // Progress bar
-  progressWrap: { flexDirection: "row", alignItems: "center", gap: 10 },
-  progressBar: { flex: 1, height: 4, backgroundColor: "#111e35", borderRadius: 2, overflow: "hidden" },
-  progressFill: { height: 4, backgroundColor: "#22c55e", borderRadius: 2 },
-  progressLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: "#334155" },
-
-  // Check Out
-  checkOutBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 13, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-  checkOutBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-
-  // Mess card
-  messRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1.5, borderColor: "#111e35", overflow: "hidden" },
-  messBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  messBtnText: { fontSize: 13, fontFamily: "Inter_700Bold" },
-
-  // Empty
-  empty: { alignItems: "center", paddingTop: 80, gap: 12 },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#1e2d4a" },
-
+  avatarText: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  studentMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  attBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  attDot: { width: 6, height: 6, borderRadius: 3 },
+  attLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  emptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 12 },
+  emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
   // Modal
-  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "#00000066" },
-  modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40, gap: 12 },
-  modalHandle: { width: 40, height: 4, backgroundColor: "#334155", borderRadius: 2, alignSelf: "center", marginBottom: 8 },
-  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  modalSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: "Inter_400Regular" },
-  textArea: { height: 80, textAlignVertical: "top" },
-  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
-  cancelBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 14, alignItems: "center" },
-  cancelBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  submitModalBtn: { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-  submitModalBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  modalContainer: { flex: 1 },
+  modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 20, borderBottomWidth: 1 },
+  modalAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  modalAvatarText: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  modalName: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  modalSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  closeBtn: { padding: 4 },
+  statusCard: { padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 20 },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 15, fontFamily: "Inter_700Bold", flex: 1 },
+  statusTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  sectionLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.8, marginBottom: 8, marginTop: 4 },
+  sectionHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 8, marginTop: -4 },
+  stepRow: { flexDirection: "row", gap: 8, marginBottom: 16, flexWrap: "wrap" },
+  stepBtn: { flex: 1, minWidth: 90, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1 },
+  stepBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
+  hintText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  clearBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
+  clearBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  // Student self view
+  selfStatusCard: { padding: 20, borderRadius: 14, borderWidth: 1, alignItems: "center", gap: 8, marginBottom: 20 },
+  selfStatusText: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  selfStatusSub: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  selfSection: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 12 },
+  invRow: { flexDirection: "row", gap: 10 },
+  invCard: { flex: 1, alignItems: "center", padding: 14, borderRadius: 12, borderWidth: 1, gap: 6 },
+  invCardLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  invCardStatus: { fontSize: 11, fontFamily: "Inter_400Regular" },
 });

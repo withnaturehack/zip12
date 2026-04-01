@@ -7,8 +7,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { Badge } from "@/components/ui/Badge";
 
@@ -20,6 +21,16 @@ export default function ProfileScreen() {
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
   const { user, logout, isCoordinator, isVolunteer, isSuperAdmin, isStudent } = useAuth();
+  const request = useApiRequest();
+
+  const { data: pendingCount } = useQuery<{ count: number }>({
+    queryKey: ["pending-count"],
+    queryFn: () => request("/approvals/count"),
+    enabled: isSuperAdmin,
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+  const pendingNum = pendingCount?.count ?? 0;
 
   const handleLogout = () => {
     if (Platform.OS === "web") {
@@ -56,6 +67,7 @@ export default function ProfileScreen() {
       { icon: "list", label: "Hostels", path: "/admin/hostels" },
     ] : []),
     ...(isSuperAdmin ? [
+      { icon: "user-check", label: "Pending Approvals", path: "/admin/approvals", badge: pendingNum },
       { icon: "clock", label: "Activity Logs", path: "/admin/activity-logs" },
       { icon: "upload-cloud", label: "CSV Import", path: "/admin/csv-import" },
       { icon: "database", label: "Master Table", path: "/admin/master-table" },
@@ -108,7 +120,7 @@ export default function ProfileScreen() {
       {!isStudent && (
         <AnimatedCard style={styles.card}>
           <Text style={[styles.cardTitle, { color: theme.text }]}>Staff Tools</Text>
-          {staffTools.map(({ icon, label, path }) => (
+          {staffTools.map(({ icon, label, path, badge }: any) => (
             <Pressable
               key={label}
               onPress={() => { Haptics.selectionAsync(); router.push(path as any); }}
@@ -118,6 +130,11 @@ export default function ProfileScreen() {
                 <Feather name={icon as any} size={17} color={theme.tint} />
               </View>
               <Text style={[styles.menuLabel, { color: theme.text }]}>{label}</Text>
+              {badge > 0 && (
+                <View style={styles.menuBadge}>
+                  <Text style={styles.menuBadgeText}>{badge}</Text>
+                </View>
+              )}
               <Feather name="chevron-right" size={16} color={theme.textTertiary} />
             </Pressable>
           ))}
@@ -154,4 +171,6 @@ const styles = StyleSheet.create({
   menuLabel: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
   logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginHorizontal: 20, marginTop: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5 },
   logoutText: { color: "#ef4444", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  menuBadge: { backgroundColor: "#ef4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, marginRight: 4 },
+  menuBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
 });

@@ -7,25 +7,66 @@ const router = Router();
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 
-// POST /api/checkins/:studentId — mark student check-in
+// Reset inventory to blank state (called on check-in or clear)
+async function resetInventory(studentId: string, hostelId: string, updatedBy: string) {
+  const [existing] = await db.select().from(studentInventoryTable)
+    .where(eq(studentInventoryTable.studentId, studentId));
+
+  if (existing) {
+    await db.update(studentInventoryTable).set({
+      mattress: false,
+      bedsheet: false,
+      pillow: false,
+      mattressSubmitted: false,
+      bedsheetSubmitted: false,
+      pillowSubmitted: false,
+      inventoryLocked: false,
+      messCard: false,
+      lockedBy: null,
+      lockedAt: null,
+      updatedBy,
+      updatedAt: new Date(),
+    }).where(eq(studentInventoryTable.id, existing.id));
+  } else {
+    await db.insert(studentInventoryTable).values({
+      id: generateId(),
+      studentId,
+      hostelId: hostelId || null,
+      mattress: false,
+      bedsheet: false,
+      pillow: false,
+      mattressSubmitted: false,
+      bedsheetSubmitted: false,
+      pillowSubmitted: false,
+      inventoryLocked: false,
+      messCard: false,
+      updatedBy,
+    });
+  }
+}
+
+// POST /api/checkins/:studentId — mark student check-in (resets inventory)
 router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
   const { studentId } = req.params;
   const { note } = req.body;
   const date = todayStr();
 
-  const [student] = await db.select({
-    id: usersTable.id,
-    hostelId: usersTable.hostelId,
-  }).from(usersTable).where(eq(usersTable.id, studentId));
+  const [student] = await db.select({ id: usersTable.id, hostelId: usersTable.hostelId })
+    .from(usersTable).where(eq(usersTable.id, studentId));
 
   if (!student) { res.status(404).json({ message: "Student not found" }); return; }
 
-  // Check for existing check-in today (no duplicates)
+  // Check for existing check-in today
   const [existing] = await db.select().from(checkinsTable)
     .where(and(eq(checkinsTable.studentId, studentId), eq(checkinsTable.date, date)));
 
   if (existing) {
-    res.json({ ...existing, checkInTime: existing.checkInTime?.toISOString() || null, checkOutTime: existing.checkOutTime?.toISOString() || null, alreadyCheckedIn: true });
+    res.json({
+      ...existing,
+      checkInTime: existing.checkInTime?.toISOString() || null,
+      checkOutTime: existing.checkOutTime?.toISOString() || null,
+      alreadyCheckedIn: true,
+    });
     return;
   }
 
@@ -39,6 +80,9 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
     note: note || null,
   }).returning();
 
+  // Reset inventory fresh on every new check-in
+  await resetInventory(studentId, student.hostelId || "", req.userId!);
+
   res.status(201).json({
     ...record,
     checkInTime: record.checkInTime?.toISOString() || null,
@@ -47,17 +91,16 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
   });
 });
 
-// PATCH /api/checkins/:id/checkout — mark checkout time (blocked if inventory not submitted)
+// PATCH /api/checkins/:id/checkout — check out (requires inventory locked)
 router.patch("/:id/checkout", requireVolunteer, async (req: AuthRequest, res) => {
   const [checkin] = await db.select().from(checkinsTable).where(eq(checkinsTable.id, req.params.id));
   if (!checkin) { res.status(404).json({ message: "Checkin record not found" }); return; }
 
-  // Block checkout if inventory not yet submitted/locked
   const [inv] = await db.select().from(studentInventoryTable)
     .where(eq(studentInventoryTable.studentId, checkin.studentId));
 
   if (!inv?.inventoryLocked) {
-    res.status(400).json({ message: "Cannot check out: inventory must be submitted first." });
+    res.status(400).json({ message: "Cannot check out: submit all given inventory items first." });
     return;
   }
 
@@ -74,7 +117,53 @@ router.patch("/:id/checkout", requireVolunteer, async (req: AuthRequest, res) =>
   });
 });
 
-// GET /api/checkins — list check-ins (with optional hostelId + date filters)
+// DELETE /api/checkins/:studentId/today — clear today's check-in + reset inventory
+router.delete("/:studentId/today", requireVolunteer, async (req: AuthRequest, res) => {
+  const { studentId } = req.params;
+  const date = todayStr();
+
+  const [student] = await db.select({ id: usersTable.id, hostelId: usersTable.hostelId })
+    .from(usersTable).where(eq(usersTable.id, studentId));
+
+  if (!student) { res.status(404).json({ message: "Student not found" }); return; }
+
+  // Delete today's check-in record
+  await db.delete(checkinsTable)
+    .where(and(eq(checkinsTable.studentId, studentId), eq(checkinsTable.date, date)));
+
+  // Reset inventory
+  await resetInventory(studentId, student.hostelId || "", req.userId!);
+
+  res.json({ success: true, message: "Check-in and inventory cleared for today" });
+});
+
+// GET /api/checkins/:studentId/today — get today's check-in status for a student
+router.get("/:studentId/today", requireVolunteer, async (req: AuthRequest, res) => {
+  const { studentId } = req.params;
+  const date = todayStr();
+
+  const [checkin] = await db.select().from(checkinsTable)
+    .where(and(eq(checkinsTable.studentId, studentId), eq(checkinsTable.date, date)));
+
+  const [inv] = await db.select().from(studentInventoryTable)
+    .where(eq(studentInventoryTable.studentId, studentId));
+
+  res.json({
+    checkin: checkin ? {
+      ...checkin,
+      checkInTime: checkin.checkInTime?.toISOString() || null,
+      checkOutTime: checkin.checkOutTime?.toISOString() || null,
+      createdAt: checkin.createdAt.toISOString(),
+    } : null,
+    inventory: inv || {
+      mattress: false, bedsheet: false, pillow: false,
+      mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
+      inventoryLocked: false, messCard: false,
+    },
+  });
+});
+
+// GET /api/checkins — list check-ins
 router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   const { hostelId, date, limit: rawLimit, offset: rawOffset } = req.query;
   const limit = Math.min(Number(rawLimit) || 100, 500);
@@ -110,7 +199,6 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
 
   let filtered = rows.filter(r => r.date === targetDate);
 
-  // Scope non-superadmin/admin to their hostel
   if (!COORDINATOR_ROLES.includes(caller?.role || "")) {
     const myHostelId = caller?.hostelId || "";
     filtered = filtered.filter(r => r.hostelId === myHostelId);
@@ -126,7 +214,7 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   })));
 });
 
-// GET /api/checkins/stats — today's check-in counts
+// GET /api/checkins/stats
 router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
   const date = todayStr();
   const all = await db.select({
