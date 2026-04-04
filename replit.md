@@ -151,10 +151,28 @@ workspace/
 
 ## Environment Variables
 
-- `DATABASE_URL` — PostgreSQL connection string
-- `JWT_SECRET` — JWT signing secret (default: campusops-secret-2024)
+- `SUPABASE_DATABASE_URL` — Supabase PostgreSQL connection (primary, transaction pooler port 6543)
+- `DATABASE_URL` — Replit PostgreSQL fallback
+- `JWT_SECRET` — JWT signing secret
 - `PORT` — API server port (set to 8080)
 - `EXPO_PUBLIC_API_URL` — API base URL (set in `artifacts/mobile/.env`)
+
+## Production Database (Supabase)
+
+Connected to Supabase at `aws-1-ap-south-1.pooler.supabase.com:6543` with real IIT Madras data:
+- **3,060 real students** across 13 hostels
+- **13 hostels**: Bhadra, Brahmaputra, Cauvery, Ganga, Godavari, Jamuna, Krishna, Mandakini, Narmada, Saraswathi, Sharavathi, Swarnamukhi, Tapti
+- Hostel IDs are the hostel names (e.g., `hostelId = "Bhadra"`)
+- 26 volunteers + 6 admins + 1 superadmin imported
+- `drizzle.config.ts` checks `SUPABASE_DATABASE_URL` first, then falls back to `DATABASE_URL`
+
+## Demo Staff Accounts (password: 123456)
+
+- `superadmin@iitm.ac.in` — SuperAdmin
+- `admin@iitm.ac.in` — Admin (no hostel assigned by default)
+- `volunteer@iitm.ac.in` — Volunteer (assigned to Bhadra)
+- `volunteer2@iitm.ac.in` — Volunteer (assigned to second hostel)
+- `coordinator@iitm.ac.in` — Coordinator (assigned to Bhadra + second hostel)
 
 ## DB Schema
 

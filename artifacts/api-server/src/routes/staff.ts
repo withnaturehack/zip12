@@ -14,7 +14,7 @@ function isOnline(lastActiveAt: Date | null): boolean {
 
 // POST /api/staff/go-active — volunteer/staff marks themselves active
 router.post("/go-active", requireVolunteer, async (req: AuthRequest, res) => {
-  const { remark } = req.body;
+  const { remark } = req.body || {};
   const now = new Date();
   const [user] = await db.select({ hostelId: usersTable.hostelId }).from(usersTable).where(eq(usersTable.id, req.userId!));
 
@@ -35,7 +35,7 @@ router.post("/go-active", requireVolunteer, async (req: AuthRequest, res) => {
 
 // POST /api/staff/go-inactive — volunteer/staff marks themselves inactive
 router.post("/go-inactive", requireVolunteer, async (req: AuthRequest, res) => {
-  const { remark } = req.body;
+  const { remark } = req.body || {};
   const [user] = await db.select({ hostelId: usersTable.hostelId }).from(usersTable).where(eq(usersTable.id, req.userId!));
 
   await db.update(usersTable)
