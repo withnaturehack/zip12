@@ -1,18 +1,69 @@
 import { Router } from "express";
 import { db, hostelsTable, emergencyContactsTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, generateId, AuthRequest } from "../lib/auth.js";
 
 const router = Router();
 
 // GET /api/hostels
 router.get("/", requireAuth, async (req, res) => {
-  const hostels = await db.select().from(hostelsTable);
+  const [caller] = await db.select({
+    role: usersTable.role,
+    hostelId: usersTable.hostelId,
+    assignedHostelIds: usersTable.assignedHostelIds,
+  }).from(usersTable).where(eq(usersTable.id, (req as AuthRequest).userId!));
+
+  if (!caller) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  let hostels;
+  if (caller.role === "superadmin") {
+    hostels = await db.select().from(hostelsTable);
+  } else if (caller.role === "volunteer" || caller.role === "student") {
+    if (!caller.hostelId) {
+      res.json([]);
+      return;
+    }
+    hostels = await db.select().from(hostelsTable).where(eq(hostelsTable.id, caller.hostelId));
+  } else {
+    const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
+    const scoped = Array.from(new Set([...assigned, caller.hostelId || ""].filter(Boolean)));
+    if (scoped.length === 0) {
+      res.json([]);
+      return;
+    }
+    hostels = await db.select().from(hostelsTable).where(inArray(hostelsTable.id, scoped));
+  }
+
   res.json(hostels.map(h => ({ ...h, createdAt: h.createdAt.toISOString() })));
 });
 
 // GET /api/hostels/:id
 router.get("/:id", requireAuth, async (req, res) => {
+  const [caller] = await db.select({
+    role: usersTable.role,
+    hostelId: usersTable.hostelId,
+    assignedHostelIds: usersTable.assignedHostelIds,
+  }).from(usersTable).where(eq(usersTable.id, (req as AuthRequest).userId!));
+
+  if (!caller) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  if (caller.role !== "superadmin") {
+    const scoped = caller.role === "volunteer" || caller.role === "student"
+      ? [caller.hostelId || ""].filter(Boolean)
+      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+
+    if (!scoped.includes(req.params.id)) {
+      res.status(403).json({ error: "Forbidden", message: "Hostel not in your assigned scope" });
+      return;
+    }
+  }
+
   const [hostel] = await db.select().from(hostelsTable).where(eq(hostelsTable.id, req.params.id));
   if (!hostel) {
     res.status(404).json({ error: "Not Found" });

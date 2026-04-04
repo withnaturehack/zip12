@@ -1,11 +1,11 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable, Modal, ScrollView,
   RefreshControl, Platform, useColorScheme,
   ActivityIndicator, TextInput, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -14,6 +14,7 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
 const PAGE = 30;
+const FETCH_PAGE_SIZE = 1000;
 
 function formatDT(ts: string | null | undefined): string {
   if (!ts) return "—";
@@ -53,22 +54,34 @@ function StudentDetailModal({ student, visible, onClose, theme, onUpdated }: {
     staleTime: 30000,
   });
 
-  // Fetch today's check-in
+  // Fetch latest check-in history
   const { data: checkins = [] } = useQuery<any[]>({
-    queryKey: ["student-checkin", student?.id],
-    queryFn: async () => {
-      const all = await request(`/checkins?limit=100`);
-      return (Array.isArray(all) ? all : []).filter((c: any) => c.studentId === student?.id);
-    },
+    queryKey: ["student-checkin-history", student?.id],
+    queryFn: () => request(`/students/${student?.id}/checkins-history?limit=30`),
     enabled: visible && !!student?.id,
     staleTime: 15000,
   });
 
-  const todayCheckin = checkins[0];
-
   const s = profile || student;
-  const isEntered = s?.attendanceStatus === "entered";
+  const isCheckedIn = !!s?.checkInTime && !s?.checkOutTime;
+  const isCheckedOut = !!s?.checkOutTime;
+  const isEntered = isCheckedIn;
   const inv = inventory as any || {};
+  const detailFields = [
+    { label: "Roll No.", value: s?.rollNumber || "—" },
+    { label: "Email", value: s?.email || "—" },
+    { label: "Gender", value: s?.gender || "—" },
+    { label: "Age", value: s?.age || "—" },
+    { label: "DS/ES", value: s?.dsEs || "—" },
+    { label: "Hostel", value: s?.allottedHostel || s?.hostelName || "—" },
+    { label: "Room No.", value: s?.roomNumber || "—" },
+    { label: "Mess", value: s?.allottedMess || s?.assignedMess || "—" },
+    { label: "Mobile", value: s?.mobileNumber || s?.contactNumber || s?.phone || "—" },
+    { label: "Emergency", value: s?.emergencyContact || "—" },
+    { label: "Area", value: s?.area || "—" },
+    { label: "Remarks", value: s?.remarks || "—" },
+    { label: "Attendance", value: s?.attendanceStatus || "—" },
+  ];
 
   const markAttendance = async () => {
     if (!s?.id) return;
@@ -110,7 +123,6 @@ function StudentDetailModal({ student, visible, onClose, theme, onUpdated }: {
             <ActivityIndicator color={theme.tint} style={{ marginTop: 40 }} />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Avatar + name */}
               <View style={styles.profileHeader}>
                 <View style={[styles.avatar, { backgroundColor: theme.tint + "20" }]}>
                   <Text style={[styles.avatarText, { color: theme.tint }]}>{(s?.name || "?").charAt(0).toUpperCase()}</Text>
@@ -120,24 +132,39 @@ function StudentDetailModal({ student, visible, onClose, theme, onUpdated }: {
                   <Text style={[styles.pEmail, { color: theme.textSecondary }]}>{s?.email}</Text>
                   {s?.rollNumber && <Text style={[styles.pMeta, { color: theme.textTertiary }]}>Roll: {s.rollNumber}</Text>}
                 </View>
-                <View style={[styles.attBadge, { backgroundColor: isEntered ? "#22c55e20" : "#f59e0b20" }]}>
-                  <View style={[styles.attDot, { backgroundColor: isEntered ? "#22c55e" : "#f59e0b" }]} />
-                  <Text style={[styles.attBadgeText, { color: isEntered ? "#22c55e" : "#f59e0b" }]}>
-                    {isEntered ? "In Campus" : "Pending"}
+                <View style={[styles.attBadge, { backgroundColor: isCheckedOut ? "#6366f120" : isEntered ? "#22c55e20" : "#f59e0b20" }]}>
+                  <View style={[styles.attDot, { backgroundColor: isCheckedOut ? "#6366f1" : isEntered ? "#22c55e" : "#f59e0b" }]} />
+                  <Text style={[styles.attBadgeText, { color: isCheckedOut ? "#6366f1" : isEntered ? "#22c55e" : "#f59e0b" }]}> 
+                    {isCheckedOut ? "Checked Out" : isEntered ? "In Campus" : "Not Checked In"}
                   </Text>
                 </View>
               </View>
 
-              {/* Details grid */}
-              <View style={[styles.detailCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                <DetailRow icon="home" label="Hostel" value={s?.hostelName || "—"} theme={theme} />
-                <DetailRow icon="hash" label="Room No." value={s?.roomNumber || "—"} theme={theme} />
-                <DetailRow icon="coffee" label="Mess" value={s?.assignedMess || "—"} theme={theme} />
-                <DetailRow icon="map-pin" label="Area" value={s?.area || "—"} theme={theme} />
-                <DetailRow icon="phone" label="Contact" value={s?.contactNumber || s?.phone || "—"} theme={theme} />
+              <View style={[styles.detailCard, { backgroundColor: theme.background, borderColor: theme.border, marginBottom: 10 }]}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Student Record</Text>
+                <View style={styles.fieldGrid}>
+                  {detailFields.map(field => (
+                    <View key={field.label} style={[styles.fieldTile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                      <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>{field.label}</Text>
+                      <Text style={[styles.fieldValue, { color: theme.text }]} numberOfLines={3}>{field.value}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
 
-              {/* Inventory */}
+              <View style={[styles.detailCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <DetailRow icon="home" label="Hostel" value={s?.allottedHostel || s?.hostelName || "—"} theme={theme} />
+                <DetailRow icon="hash" label="Room No." value={s?.roomNumber || "—"} theme={theme} />
+                <DetailRow icon="coffee" label="Mess" value={s?.allottedMess || s?.assignedMess || "—"} theme={theme} />
+                <DetailRow icon="users" label="Gender" value={s?.gender || "—"} theme={theme} />
+                <DetailRow icon="calendar" label="Age" value={String(s?.age || "—")} theme={theme} />
+                <DetailRow icon="tag" label="DS/ES" value={s?.dsEs || "—"} theme={theme} />
+                <DetailRow icon="map-pin" label="Area" value={s?.area || "—"} theme={theme} />
+                <DetailRow icon="phone" label="Mobile" value={s?.mobileNumber || s?.contactNumber || s?.phone || "—"} theme={theme} />
+                <DetailRow icon="phone-call" label="Emergency" value={s?.emergencyContact || "—"} theme={theme} />
+                <DetailRow icon="file-text" label="Remarks" value={s?.remarks || "—"} theme={theme} />
+              </View>
+
               <View style={[styles.detailCard, { backgroundColor: theme.background, borderColor: theme.border, marginTop: 10 }]}>
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>Inventory</Text>
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
@@ -155,19 +182,18 @@ function StudentDetailModal({ student, visible, onClose, theme, onUpdated }: {
                 </View>
               </View>
 
-              {/* Check-in status */}
               <View style={[styles.detailCard, { backgroundColor: theme.background, borderColor: theme.border, marginTop: 10 }]}>
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>Campus Check-in (Today)</Text>
-                {todayCheckin ? (
+                {s?.checkInTime ? (
                   <View style={{ marginTop: 8, gap: 4 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Feather name="log-in" size={14} color="#22c55e" />
-                      <Text style={[styles.checkinTime, { color: theme.text }]}>Check-in: {formatDT(todayCheckin.checkInTime)}</Text>
+                      <Text style={[styles.checkinTime, { color: theme.text }]}>Check-in: {formatDT(s?.checkInTime)}</Text>
                     </View>
-                    {todayCheckin.checkOutTime && (
+                    {s?.checkOutTime && (
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                         <Feather name="log-out" size={14} color="#ef4444" />
-                        <Text style={[styles.checkinTime, { color: theme.text }]}>Check-out: {formatDT(todayCheckin.checkOutTime)}</Text>
+                        <Text style={[styles.checkinTime, { color: theme.text }]}>Check-out: {formatDT(s?.checkOutTime)}</Text>
                       </View>
                     )}
                   </View>
@@ -176,7 +202,30 @@ function StudentDetailModal({ student, visible, onClose, theme, onUpdated }: {
                 )}
               </View>
 
-              {/* Action buttons */}
+              <View style={[styles.detailCard, { backgroundColor: theme.background, borderColor: theme.border, marginTop: 10 }]}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Check-in History</Text>
+                {checkins.length > 0 ? (
+                  <View style={{ marginTop: 8, gap: 8 }}>
+                    {checkins.slice(0, 12).map((c: any) => (
+                      <View key={c.id} style={styles.historyRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.historyDate, { color: theme.text }]}>{c.date || "—"}</Text>
+                          <Text style={[styles.historyTime, { color: theme.textSecondary }]}>In: {formatDT(c.checkInTime)}</Text>
+                          <Text style={[styles.historyTime, { color: theme.textSecondary }]}>Out: {formatDT(c.checkOutTime)}</Text>
+                        </View>
+                        <View style={[styles.historyBadge, { backgroundColor: c.checkOutTime ? "#6366f120" : c.checkInTime ? "#22c55e20" : "#f59e0b20" }]}>
+                          <Text style={[styles.historyBadgeText, { color: c.checkOutTime ? "#6366f1" : c.checkInTime ? "#22c55e" : "#f59e0b" }]}> 
+                            {c.checkOutTime ? "Checked Out" : c.checkInTime ? "In Campus" : "Not Checked In"}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.noCheckin, { color: theme.textSecondary }]}>No check-in history found</Text>
+                )}
+              </View>
+
               {canMark && (
                 <View style={{ gap: 10, marginTop: 14 }}>
                   <Pressable
@@ -193,7 +242,7 @@ function StudentDetailModal({ student, visible, onClose, theme, onUpdated }: {
                       </>
                     )}
                   </Pressable>
-                  {!todayCheckin && (
+                  {!s?.checkInTime && (
                     <Pressable
                       onPress={markCheckin}
                       disabled={checkingIn}
@@ -241,15 +290,47 @@ export default function MasterTableScreen() {
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
   const request = useApiRequest();
+  const { user } = useAuth();
 
-  const [filter, setFilter] = useState<"all" | "entered" | "not_entered">("all");
+  const [filter, setFilter] = useState<"all" | "in_campus" | "checked_out" | "not_checked_in">("all");
   const [search, setSearch] = useState("");
+  const [hostelFilter, setHostelFilter] = useState("");
   const [shown, setShown] = useState(PAGE);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
 
+  const { data: hostels = [] } = useQuery<any[]>({
+    queryKey: ["hostels"],
+    queryFn: () => request("/hostels"),
+    staleTime: 30000,
+  });
+
+  const loadAllStudents = useCallback(async () => {
+    const loaded: any[] = [];
+    let offset = 0;
+    let total = Infinity;
+
+    while (true) {
+      const response = await request(`/students?offset=${offset}&limit=${FETCH_PAGE_SIZE}`);
+      const batch = Array.isArray(response) ? response : (response?.students || []);
+      if (!batch.length) break;
+
+      loaded.push(...batch);
+
+      const responseTotal = Number(response?.total);
+      if (Number.isFinite(responseTotal) && responseTotal >= 0) {
+        total = responseTotal;
+      }
+
+      offset += batch.length;
+      if (Number.isFinite(total) && loaded.length >= total) break;
+    }
+
+    return loaded;
+  }, [request]);
+
   const { data: students = [], isLoading, refetch } = useQuery({
     queryKey: ["master-students"],
-    queryFn: () => request("/students?limit=500"),
+    queryFn: loadAllStudents,
     staleTime: 30000,
     refetchInterval: 30000,
   });
@@ -261,26 +342,75 @@ export default function MasterTableScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const arr = (Array.isArray(students) ? students : (students as any).students || []) as any[];
+  const arr = Array.isArray(students) ? students : [];
 
-  const filtered = arr.filter(s => {
-    if (filter === "entered" && s.attendanceStatus !== "entered") return false;
-    if (filter === "not_entered" && s.attendanceStatus === "entered") return false;
+  const assignedHostelIds: string[] = useMemo(() => {
+    try {
+      const raw: any = user?.assignedHostelIds;
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+      if (typeof raw === "string") {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }, [user?.assignedHostelIds]);
+
+  const scopedHostelIds = useMemo(() => {
+    if (user?.role === "superadmin") return null;
+    if (user?.role === "volunteer") return [user?.hostelId].filter(Boolean) as string[];
+    return Array.from(new Set([...(assignedHostelIds || []), user?.hostelId || ""].filter(Boolean)));
+  }, [user?.role, user?.hostelId, assignedHostelIds]);
+
+  const scopedArr = useMemo(() => {
+    if (!scopedHostelIds) return arr;
+    if (scopedHostelIds.length === 0) return [];
+    return arr.filter((s: any) => scopedHostelIds.includes(String(s.hostelId || "")));
+  }, [arr, scopedHostelIds]);
+
+  const filtered = scopedArr.filter(s => {
+    const isCheckedIn = !!s.checkInTime && !s.checkOutTime;
+    const isCheckedOut = !!s.checkOutTime;
+    const isNotCheckedIn = !s.checkInTime;
+
+    if (hostelFilter && String(s.hostelId || "") !== hostelFilter) return false;
+
+    if (filter === "in_campus" && !isCheckedIn) return false;
+    if (filter === "checked_out" && !isCheckedOut) return false;
+    if (filter === "not_checked_in" && !isNotCheckedIn) return false;
     if (search) {
       const q = search.toLowerCase();
+      const statusText = isCheckedOut ? "checked out out" : isCheckedIn ? "in campus in entered" : "not checked in pending";
+      const haystack = [
+        s.name,
+        s.rollNumber,
+        s.roomNumber,
+        s.assignedMess,
+        s.allottedMess,
+        s.email,
+        s.hostelId,
+        s.hostelName,
+        s.allottedHostel,
+        s.phone,
+        s.contactNumber,
+        s.mobileNumber,
+        s.area,
+        statusText,
+      ].filter(Boolean).join(" ").toLowerCase();
       return (
-        (s.name || "").toLowerCase().includes(q) ||
-        (s.rollNumber || "").toLowerCase().includes(q) ||
-        (s.roomNumber || "").toLowerCase().includes(q) ||
-        (s.assignedMess || "").toLowerCase().includes(q) ||
-        (s.email || "").toLowerCase().includes(q)
+        haystack.includes(q)
       );
     }
     return true;
   });
 
   const visible = filtered.slice(0, shown);
-  const entered = arr.filter(s => s.attendanceStatus === "entered").length;
+  const entered = scopedArr.filter(s => !!s.checkInTime && !s.checkOutTime).length;
+  const checkedOut = scopedArr.filter(s => !!s.checkOutTime).length;
+  const notCheckedIn = scopedArr.length - entered - checkedOut;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -294,14 +424,15 @@ export default function MasterTableScreen() {
 
       {/* Summary */}
       <View style={[styles.summaryRow, { borderBottomColor: theme.border }]}>
-        <SummaryPill label="Total" value={arr.length} color={theme.text} theme={theme} />
+        <SummaryPill label="Total" value={scopedArr.length} color={theme.text} theme={theme} />
         <SummaryPill label="In Campus" value={entered} color="#22c55e" theme={theme} />
-        <SummaryPill label="Pending" value={arr.length - entered} color="#f59e0b" theme={theme} />
+        <SummaryPill label="Checked Out" value={checkedOut} color="#6366f1" theme={theme} />
+        <SummaryPill label="Not Checked In" value={notCheckedIn} color="#f59e0b" theme={theme} />
       </View>
 
       {/* Filters */}
       <View style={[styles.filterRow, { borderBottomColor: theme.border }]}>
-        {(["all", "entered", "not_entered"] as const).map(f => (
+        {(["all", "in_campus", "checked_out", "not_checked_in"] as const).map(f => (
           <Pressable
             key={f}
             onPress={() => { setFilter(f); setShown(PAGE); Haptics.selectionAsync(); }}
@@ -311,7 +442,7 @@ export default function MasterTableScreen() {
             }]}
           >
             <Text style={[styles.filterLabel, { color: filter === f ? "#fff" : theme.textSecondary }]}>
-              {f === "all" ? "All" : f === "entered" ? "In Campus" : "Pending"}
+              {f === "all" ? "All" : f === "in_campus" ? "In Campus" : f === "checked_out" ? "Checked Out" : "Not Checked In"}
             </Text>
           </Pressable>
         ))}
@@ -322,7 +453,7 @@ export default function MasterTableScreen() {
         <Feather name="search" size={15} color={theme.textSecondary} />
         <TextInput
           style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search name, roll, room, mess…"
+          placeholder="Search name, roll, room, mess, hostel, phone, status…"
           placeholderTextColor={theme.textTertiary}
           value={search}
           onChangeText={(t) => { setSearch(t); setShown(PAGE); }}
@@ -334,12 +465,53 @@ export default function MasterTableScreen() {
         )}
       </View>
 
+      {(hostels as any[]).length > 1 && (
+        <View style={[styles.hostelChips, { borderBottomColor: theme.border }]}> 
+          <Pressable
+            onPress={() => { setHostelFilter(""); setShown(PAGE); }}
+            style={[styles.chip, {
+              borderColor: !hostelFilter ? theme.tint : theme.border,
+              backgroundColor: !hostelFilter ? theme.tint + "15" : theme.surface,
+            }]}
+          >
+            <Text style={[styles.chipText, { color: !hostelFilter ? theme.tint : theme.textSecondary }]}>All Hostels</Text>
+          </Pressable>
+          {(hostels as any[]).map((h: any) => (
+            <Pressable
+              key={h.id}
+              onPress={() => { setHostelFilter(hostelFilter === h.id ? "" : h.id); setShown(PAGE); }}
+              style={[styles.chip, {
+                borderColor: hostelFilter === h.id ? theme.tint : theme.border,
+                backgroundColor: hostelFilter === h.id ? theme.tint + "15" : theme.surface,
+              }]}
+            >
+              <Text style={[styles.chipText, { color: hostelFilter === h.id ? theme.tint : theme.textSecondary }]} numberOfLines={1}>
+                {h.name}
+              </Text>
+            </Pressable>
+          ))}
+
+          {!!hostelFilter && (
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push({ pathname: "/admin/hostels", params: { hostelId: hostelFilter } } as any);
+              }}
+              style={[styles.chip, { borderColor: theme.tint, backgroundColor: theme.tint + "22" }]}
+            >
+              <Text style={[styles.chipText, { color: theme.tint }]}>Open Particular Hostel</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       {/* Table Header */}
       <View style={[styles.tableHead, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <Text style={[styles.th, { color: theme.textSecondary, flex: 2 }]}>STUDENT</Text>
+        <Text style={[styles.th, { color: theme.textSecondary, flex: 1 }]}>HOSTEL / EMAIL</Text>
         <Text style={[styles.th, { color: theme.textSecondary, flex: 1 }]}>ROOM</Text>
         <Text style={[styles.th, { color: theme.textSecondary, flex: 1 }]}>MESS</Text>
-        <Text style={[styles.th, { color: theme.textSecondary, width: 60, textAlign: "center" }]}>STATUS</Text>
+        <Text style={[styles.th, { color: theme.textSecondary, width: 92, textAlign: "center" }]}>STATUS</Text>
       </View>
 
       {isLoading ? (
@@ -348,6 +520,7 @@ export default function MasterTableScreen() {
         <FlatList
           data={visible}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
           contentContainerStyle={{ paddingBottom: 100 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border }} />}
@@ -363,21 +536,30 @@ export default function MasterTableScreen() {
             </View>
           )}
           renderItem={({ item }) => {
-            const isIn = item.attendanceStatus === "entered";
+            const isIn = !!item.checkInTime && !item.checkOutTime;
+            const isOut = !!item.checkOutTime;
             return (
               <Pressable
                 onPress={() => { Haptics.selectionAsync(); setSelectedStudent(item); }}
+                hitSlop={6}
                 style={[styles.tableRow, { backgroundColor: theme.background }]}
               >
                 <View style={{ flex: 2 }}>
                   <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
                   <Text style={[styles.roll, { color: theme.textSecondary }]} numberOfLines={1}>{item.rollNumber || item.email}</Text>
                 </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cell, { color: theme.textSecondary }]} numberOfLines={1}>{item.allottedHostel || item.hostelName || "—"}</Text>
+                  <Text style={[styles.cell, { color: theme.textTertiary }]} numberOfLines={1}>{item.email}</Text>
+                </View>
                 <Text style={[styles.cell, { color: theme.textSecondary, flex: 1 }]}>{item.roomNumber || "—"}</Text>
-                <Text style={[styles.cell, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>{item.assignedMess || "—"}</Text>
-                <View style={{ width: 60, alignItems: "center" }}>
-                  <View style={[styles.statusPill, { backgroundColor: isIn ? "#22c55e20" : "#f59e0b20" }]}>
-                    <View style={[styles.dot, { backgroundColor: isIn ? "#22c55e" : "#f59e0b" }]} />
+                <Text style={[styles.cell, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>{item.allottedMess || item.assignedMess || "—"}</Text>
+                <View style={{ width: 92, alignItems: "center" }}>
+                  <View style={[styles.statusPill, { backgroundColor: isOut ? "#6366f120" : isIn ? "#22c55e20" : "#f59e0b20" }]}>
+                    <View style={[styles.dot, { backgroundColor: isOut ? "#6366f1" : isIn ? "#22c55e" : "#f59e0b" }]} />
+                    <Text style={[styles.statusText, { color: isOut ? "#6366f1" : isIn ? "#22c55e" : "#f59e0b" }]} numberOfLines={1}>
+                      {isOut ? "Out" : isIn ? "In" : "Pending"}
+                    </Text>
                   </View>
                 </View>
               </Pressable>
@@ -411,15 +593,18 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center" },
-  summaryRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
-  summaryPill: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, borderWidth: 1, gap: 2 },
+  summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  summaryPill: { minWidth: 78, alignItems: "center", paddingVertical: 8, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1, gap: 2 },
   summaryVal: { fontSize: 18, fontFamily: "Inter_700Bold" },
   summaryLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
-  filterBtn: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  filterBtn: { minWidth: 110, alignItems: "center", paddingVertical: 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1 },
   filterLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
   searchInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  hostelChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, maxWidth: "100%" },
+  chipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   tableHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
   th: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   tableRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10 },
@@ -448,12 +633,22 @@ const styles = StyleSheet.create({
   detailLabel: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
   detailValue: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   sectionTitle: { fontSize: 13, fontFamily: "Inter_700Bold", marginBottom: 4 },
+  fieldGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 },
+  fieldTile: { width: "48%", borderRadius: 12, borderWidth: 1, padding: 10, gap: 4 },
+  fieldLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.6 },
+  fieldValue: { fontSize: 13, fontFamily: "Inter_500Medium", lineHeight: 18 },
   invChip: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1 },
   invChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  historyRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, padding: 10 },
+  historyDate: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  historyTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  historyBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  historyBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   checkinTime: { fontSize: 13, fontFamily: "Inter_500Medium" },
   noCheckin: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 8 },
   actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13, borderRadius: 12, borderWidth: 1 },
   actionBtnText: { fontSize: 14, fontFamily: "Inter_700Bold" },
   closeBtn: { borderWidth: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   closeBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  statusText: { fontSize: 10, fontFamily: "Inter_700Bold" },
 });

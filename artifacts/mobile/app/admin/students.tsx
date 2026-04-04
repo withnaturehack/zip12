@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable, RefreshControl,
   Platform, Modal, TextInput, ActivityIndicator, Alert, useColorScheme,
@@ -16,6 +16,149 @@ import { Badge } from "@/components/ui/Badge";
 import { useDebounce } from "@/hooks/useDebounce";
 
 const PAGE_SIZE = 50;
+
+function fmtDT(ts?: string | null) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("en-IN", {
+    hour12: true,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function StudentProfileModal({ visible, studentId, onClose, theme, request }: {
+  visible: boolean;
+  studentId: string | null;
+  onClose: () => void;
+  theme: any;
+  request: any;
+}) {
+  const { data: student, isLoading: studentLoading, refetch: refetchStudent } = useQuery<any>({
+    queryKey: ["student-profile", studentId],
+    queryFn: () => request(`/students/${studentId}`),
+    enabled: visible && !!studentId,
+    staleTime: 10000,
+  });
+
+  const { data: inventory, isLoading: inventoryLoading, refetch: refetchInventory } = useQuery<any>({
+    queryKey: ["student-profile-inventory", studentId],
+    queryFn: () => request(`/attendance/inventory/${studentId}`),
+    enabled: visible && !!studentId,
+    staleTime: 10000,
+  });
+
+  const { data: checkins = [], isLoading: checkinsLoading, refetch: refetchCheckins } = useQuery<any[]>({
+    queryKey: ["student-profile-checkins", studentId],
+    queryFn: () => request(`/students/${studentId}/checkins-history?limit=20`),
+    enabled: visible && !!studentId,
+    staleTime: 10000,
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[styles.modal, { backgroundColor: theme.background }]}> 
+        <View style={[styles.modalHeader, { borderColor: theme.border }]}>
+          <Text style={[styles.modalTitle, { color: theme.text }]}>Student Profile</Text>
+          <Pressable onPress={onClose} hitSlop={8}>
+            <Feather name="x" size={24} color={theme.text} />
+          </Pressable>
+        </View>
+
+        {studentLoading ? (
+          <View style={{ padding: 20 }}><CardSkeleton /><CardSkeleton /></View>
+        ) : (
+          <FlatList
+            data={[{ key: "content" }]}
+            keyExtractor={(i) => i.key}
+            contentContainerStyle={{ padding: 20, paddingBottom: 70 }}
+            refreshControl={<RefreshControl refreshing={false} onRefresh={() => { refetchStudent(); refetchInventory(); refetchCheckins(); }} tintColor={theme.tint} />}
+            renderItem={() => {
+              const s = student || {};
+              const inv = inventory || {};
+              const inCampus = !!s.checkInTime && !s.checkOutTime;
+              const stateColor = s.checkOutTime ? "#6366f1" : inCampus ? "#22c55e" : "#f59e0b";
+              const stateLabel = s.checkOutTime ? "Checked Out" : inCampus ? "In Campus" : "Not Checked In";
+
+              return (
+                <View style={{ gap: 12 }}>
+                  <AnimatedCard style={styles.card}>
+                    <View style={styles.cardRow}>
+                      <View style={[styles.avatar, { backgroundColor: theme.tint + "20" }]}>
+                        <Text style={[styles.avatarText, { color: theme.tint }]}>{(s.name || "?").charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.studentName, { color: theme.text }]}>{s.name || "—"}</Text>
+                        <Text style={[styles.studentEmail, { color: theme.textSecondary }]}>{s.email || "—"}</Text>
+                        <Text style={[styles.room, { color: theme.textTertiary }]}>{s.rollNumber || "—"}</Text>
+                      </View>
+                      <View style={[styles.presentBadge, { backgroundColor: stateColor + "20" }]}>
+                        <Feather name="activity" size={12} color={stateColor} />
+                        <Text style={{ color: stateColor, fontSize: 11, fontFamily: "Inter_500Medium" }}>{stateLabel}</Text>
+                      </View>
+                    </View>
+                  </AnimatedCard>
+
+                  <AnimatedCard style={styles.card}>
+                    <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: 0 }]}>ACADEMIC & HOSTEL</Text>
+                    <View style={styles.meta}>
+                      <Badge label={`Hostel: ${s.allottedHostel || s.hostelName || "—"}`} variant="blue" />
+                      <Badge label={`Room: ${s.roomNumber || "—"}`} variant="gray" />
+                      <Badge label={`Mess: ${s.allottedMess || s.assignedMess || "—"}`} variant="gray" />
+                      <Badge label={`Area: ${s.area || "—"}`} variant="gray" />
+                    </View>
+                    <Text style={[styles.room, { color: theme.textSecondary, marginTop: 8 }]}>Phone: {s.mobileNumber || s.contactNumber || s.phone || "—"}</Text>
+                    <Text style={[styles.room, { color: theme.textSecondary }]}>Emergency: {s.emergencyContact || "—"}</Text>
+                  </AnimatedCard>
+
+                  <AnimatedCard style={styles.card}>
+                    <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: 0 }]}>TODAY STATUS</Text>
+                    <Text style={[styles.room, { color: theme.text }]}>Check-in: {fmtDT(s.checkInTime)}</Text>
+                    <Text style={[styles.room, { color: theme.text }]}>Check-out: {fmtDT(s.checkOutTime)}</Text>
+                    <Text style={[styles.room, { color: theme.textSecondary }]}>Attendance: {s.attendanceStatus || "—"}</Text>
+                  </AnimatedCard>
+
+                  <AnimatedCard style={styles.card}>
+                    <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: 0 }]}>INVENTORY</Text>
+                    {inventoryLoading ? <ActivityIndicator color={theme.tint} /> : (
+                      <View style={styles.meta}>
+                        <Badge label={`Mattress: ${inv.mattress ? "Yes" : "No"}`} variant={inv.mattress ? "green" : "gray"} />
+                        <Badge label={`Bedsheet: ${inv.bedsheet ? "Yes" : "No"}`} variant={inv.bedsheet ? "green" : "gray"} />
+                        <Badge label={`Pillow: ${inv.pillow ? "Yes" : "No"}`} variant={inv.pillow ? "green" : "gray"} />
+                        <Badge label={`Locked: ${inv.inventoryLocked ? "Yes" : "No"}`} variant={inv.inventoryLocked ? "green" : "gray"} />
+                      </View>
+                    )}
+                  </AnimatedCard>
+
+                  <AnimatedCard style={styles.card}>
+                    <Text style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: 0 }]}>RECENT CHECK-IN HISTORY</Text>
+                    {checkinsLoading ? <ActivityIndicator color={theme.tint} /> : (
+                      <View style={{ gap: 8 }}>
+                        {(checkins || []).slice(0, 8).map((c: any) => (
+                          <View key={c.id} style={[styles.checkRow, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+                            <Feather name="clock" size={16} color={theme.tint} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.checkLabel, { color: theme.text }]}>{c.date || "—"}</Text>
+                              <Text style={[styles.room, { color: theme.textSecondary }]}>In {fmtDT(c.checkInTime)} · Out {fmtDT(c.checkOutTime)}</Text>
+                            </View>
+                          </View>
+                        ))}
+                        {(!checkins || checkins.length === 0) && (
+                          <Text style={[styles.emptyText, { color: theme.textSecondary, paddingVertical: 6 }]}>No history found</Text>
+                        )}
+                      </View>
+                    )}
+                  </AnimatedCard>
+                </View>
+              );
+            }}
+          />
+        )}
+      </View>
+    </Modal>
+  );
+}
 
 export default function StudentsAdminScreen() {
   const colorScheme = useColorScheme();
@@ -35,6 +178,7 @@ export default function StudentsAdminScreen() {
   const [rollNumber, setRollNumber] = useState("");
   const [newHostelId, setNewHostelId] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const debouncedSearch = useDebounce(search, 400);
   const debouncedHostel = useDebounce(hostelFilter, 300);
@@ -93,29 +237,34 @@ export default function StudentsAdminScreen() {
   const hostelName = (id: string) => (hostels as any[])?.find((h: any) => h.id === id)?.name || id;
 
   const renderItem = useCallback(({ item: s }: { item: any }) => (
-    <AnimatedCard key={s.id} style={styles.card}>
-      <View style={styles.cardRow}>
-        <View style={[styles.avatar, { backgroundColor: theme.tint + "20" }]}>
-          <Text style={[styles.avatarText, { color: theme.tint }]}>{s.name.charAt(0).toUpperCase()}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{s.name}</Text>
-          <Text style={[styles.studentEmail, { color: theme.textSecondary }]} numberOfLines={1}>{s.email}</Text>
-          <View style={styles.meta}>
-            {s.rollNumber && <Badge label={s.rollNumber} variant="gray" />}
-            {s.hostelId && <Badge label={s.hostelName || hostelName(s.hostelId)} variant="blue" />}
-            {s.roomNumber && <Text style={[styles.room, { color: theme.textTertiary }]}>Rm. {s.roomNumber}</Text>}
-            {s.assignedMess && <Text style={[styles.room, { color: theme.textTertiary }]}>{s.assignedMess}</Text>}
+      <AnimatedCard
+        key={s.id}
+        style={styles.card}
+        onPress={() => { Haptics.selectionAsync(); setSelectedStudentId(s.id); }}
+      >
+        <View style={styles.cardRow}>
+          <View style={[styles.avatar, { backgroundColor: theme.tint + "20" }]}>
+            <Text style={[styles.avatarText, { color: theme.tint }]}>{s.name.charAt(0).toUpperCase()}</Text>
           </View>
-          {(s.checkInTime || s.attendanceStatus === "entered") && (
-            <View style={[styles.presentBadge, { backgroundColor: "#22C55E20" }]}>
-              <Feather name="check-circle" size={12} color="#22C55E" />
-              <Text style={{ color: "#22C55E", fontSize: 11, fontFamily: "Inter_500Medium" }}>Present today</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{s.name}</Text>
+            <Text style={[styles.studentEmail, { color: theme.textSecondary }]} numberOfLines={1}>{s.email}</Text>
+            <View style={styles.meta}>
+              {s.rollNumber && <Badge label={s.rollNumber} variant="gray" />}
+              {s.hostelId && <Badge label={s.hostelName || hostelName(s.hostelId)} variant="blue" />}
+              {s.roomNumber && <Text style={[styles.room, { color: theme.textTertiary }]}>Rm. {s.roomNumber}</Text>}
+              {s.assignedMess && <Text style={[styles.room, { color: theme.textTertiary }]}>{s.assignedMess}</Text>}
             </View>
-          )}
+            {(s.checkInTime || s.attendanceStatus === "entered") && (
+              <View style={[styles.presentBadge, { backgroundColor: "#22C55E20" }]}>
+                <Feather name="check-circle" size={12} color="#22C55E" />
+                <Text style={{ color: "#22C55E", fontSize: 11, fontFamily: "Inter_500Medium" }}>Present today</Text>
+              </View>
+            )}
+          </View>
+          <Feather name="chevron-right" size={16} color={theme.textTertiary} style={{ marginTop: 2 }} />
         </View>
-      </View>
-    </AnimatedCard>
+      </AnimatedCard>
   ), [theme, hostels]);
 
   return (
@@ -277,6 +426,14 @@ export default function StudentsAdminScreen() {
           />
         </View>
       </Modal>
+
+      <StudentProfileModal
+        visible={!!selectedStudentId}
+        studentId={selectedStudentId}
+        onClose={() => setSelectedStudentId(null)}
+        theme={theme}
+        request={request}
+      />
     </View>
   );
 }

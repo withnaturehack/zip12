@@ -5,8 +5,9 @@ import {
   hostelsTable,
   lostItemsTable,
   announcementsTable,
+  timeLogsTable,
 } from "@workspace/db";
-import { eq, count, or, sql } from "drizzle-orm";
+import { eq, count, or, sql, inArray, and } from "drizzle-orm";
 import {
   requireSuperAdmin,
   requireAdmin,
@@ -18,9 +19,44 @@ import {
 const router = Router();
 
 // GET /api/reports/summary
-router.get("/summary", requireAdmin, async (_req, res) => {
-  const [studentsCount] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "student"));
-  const [hostelsCount] = await db.select({ count: count() }).from(hostelsTable);
+router.get("/summary", requireAdmin, async (req: AuthRequest, res) => {
+  const [caller] = await db.select({
+    role: usersTable.role,
+    hostelId: usersTable.hostelId,
+    assignedHostelIds: usersTable.assignedHostelIds,
+  }).from(usersTable).where(eq(usersTable.id, req.userId!));
+
+  if (!caller) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const scopedHostelIds = caller.role === "superadmin"
+    ? null
+    : Array.from(new Set([
+      ...(JSON.parse(caller.assignedHostelIds || "[]") as string[]),
+      caller.hostelId || "",
+    ].filter(Boolean)));
+
+  if (scopedHostelIds && scopedHostelIds.length === 0) {
+    res.json({
+      totalStudents: 0,
+      totalHostels: 0,
+      totalLostItems: 0,
+      foundItems: 0,
+      totalAnnouncements: 0,
+      recentActivity: [],
+    });
+    return;
+  }
+
+  const [studentsCount] = scopedHostelIds
+    ? await db.select({ count: count() }).from(usersTable).where(and(eq(usersTable.role, "student"), inArray(usersTable.hostelId, scopedHostelIds)))
+    : await db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "student"));
+
+  const [hostelsCount] = scopedHostelIds
+    ? [{ count: scopedHostelIds.length } as { count: number }]
+    : await db.select({ count: count() }).from(hostelsTable);
   const [announcementsCount] = await db.select({ count: count() }).from(announcementsTable);
   const lostItems = await db.select({ status: lostItemsTable.status }).from(lostItemsTable);
   const foundItems = lostItems.filter(i => i.status === "found" || i.status === "claimed").length;
@@ -145,6 +181,19 @@ router.delete("/admin-users/:id", requireSuperAdmin, async (req, res) => {
 // PATCH /api/admin/assign-hostel/:id — assign hostel(s) to a staff member
 router.patch("/assign-hostel/:id", requireSuperAdmin, async (req: AuthRequest, res) => {
   const { hostelId, assignedHostelIds } = req.body;
+  const [before] = await db.select({
+    id: usersTable.id,
+    name: usersTable.name,
+    role: usersTable.role,
+    hostelId: usersTable.hostelId,
+    assignedHostelIds: usersTable.assignedHostelIds,
+  }).from(usersTable).where(eq(usersTable.id, req.params.id));
+
+  if (!before) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+
   const updates: Record<string, any> = {};
 
   if (hostelId !== undefined) updates.hostelId = hostelId || null;
@@ -152,8 +201,34 @@ router.patch("/assign-hostel/:id", requireSuperAdmin, async (req: AuthRequest, r
     updates.assignedHostelIds = JSON.stringify(Array.isArray(assignedHostelIds) ? assignedHostelIds : []);
   }
 
+  // Volunteers are single-hostel operationally; keep history trail in assignedHostelIds list.
+  if (before.role === "volunteer" && hostelId !== undefined) {
+    const prev = JSON.parse(before.assignedHostelIds || "[]") as string[];
+    const merged = Array.from(new Set([...prev, before.hostelId || "", hostelId || ""].filter(Boolean)));
+    updates.assignedHostelIds = JSON.stringify(merged);
+  }
+
   const [user] = await db.update(usersTable).set(updates).where(eq(usersTable.id, req.params.id)).returning();
   if (!user) { res.status(404).json({ message: "User not found" }); return; }
+
+  await db.insert(timeLogsTable).values({
+    id: generateId(),
+    userId: req.params.id,
+    hostelId: user.hostelId || null,
+    type: "assignment",
+    note: JSON.stringify({
+      changedBy: req.userId,
+      from: {
+        hostelId: before.hostelId,
+        assignedHostelIds: JSON.parse(before.assignedHostelIds || "[]"),
+      },
+      to: {
+        hostelId: user.hostelId,
+        assignedHostelIds: JSON.parse(user.assignedHostelIds || "[]"),
+      },
+      changedAt: new Date().toISOString(),
+    }),
+  });
 
   res.json({
     id: user.id, name: user.name, role: user.role,

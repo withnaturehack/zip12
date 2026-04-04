@@ -22,9 +22,11 @@ function buildConnectionString(): string {
 }
 
 const connectionString = buildConnectionString();
+const useInsecureSsl = process.env.PGSSL_INSECURE === "true";
 
 export const pool = new Pool({
   connectionString,
+  ...(useInsecureSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   max: 10,
   min: 0,
   idleTimeoutMillis: 10000,

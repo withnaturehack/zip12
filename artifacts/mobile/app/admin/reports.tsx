@@ -1,13 +1,14 @@
 import React, { useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
-  RefreshControl, Platform, useColorScheme, Linking, Alert,
+  RefreshControl, Platform, useColorScheme, Alert, Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
@@ -27,7 +28,7 @@ export default function ReportsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const request = useApiRequest();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
 
@@ -53,10 +54,12 @@ export default function ReportsScreen() {
 
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
+  const isSuperAdmin = user?.role === "superadmin";
+  const scopeText = isSuperAdmin ? "All hostels" : "Assigned hostels only";
 
   const today = new Date().toISOString().split("T")[0];
 
-  const download = (path: string, filename: string) => {
+  const download = async (path: string, filename: string) => {
     Haptics.selectionAsync();
     const url = `${API_BASE}${path}`;
     if (Platform.OS === "web") {
@@ -69,17 +72,34 @@ export default function ReportsScreen() {
           URL.revokeObjectURL(u);
         }).catch(() => Alert.alert("Error", "Download failed"));
     } else {
-      Alert.alert("Download", "Downloads available on the web version.");
+      try {
+        const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+        if (!dir) throw new Error("No writable directory available");
+
+        const safeName = filename.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
+        const fileUri = `${dir}${Date.now()}-${safeName}`;
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        await Share.share({
+          url: result.uri,
+          title: filename,
+          message: `Report downloaded: ${filename}`,
+        });
+      } catch (e: any) {
+        Alert.alert("Download failed", e?.message || "Could not download report on this device");
+      }
     }
   };
 
   const csvExports = [
-    { label: "Students List", sub: "All students with full details", icon: "users", path: "/export/students.csv", filename: "students.csv", color: theme.tint },
+    { label: "Students List", sub: isSuperAdmin ? "All students with full details" : "Assigned-hostel students with full details", icon: "users", path: "/export/students.csv", filename: "students.csv", color: theme.tint },
     { label: "Today's Attendance", sub: today, icon: "check-square", path: `/export/attendance.csv?date=${today}`, filename: `attendance-${today}.csv`, color: "#22c55e" },
     { label: "Check-in Report", sub: `Today's campus check-ins · ${today}`, icon: "log-in", path: `/export/checkins.csv?date=${today}`, filename: `checkins-${today}.csv`, color: "#8b5cf6" },
     { label: "Inventory Report", sub: "Mattress, bedsheet, pillow status", icon: "package", path: "/export/inventory.csv", filename: "inventory.csv", color: "#f59e0b" },
     { label: "Activity Logs", sub: "Staff login, active/inactive events", icon: "activity", path: "/export/timelogs", filename: "activity-logs.csv", color: "#6366f1" },
-    { label: "Full Report", sub: "All data combined", icon: "database", path: "/export/full-report.csv", filename: "full-report.csv", color: "#ef4444" },
+    { label: "Full Report", sub: isSuperAdmin ? "All data combined" : "Assigned-hostel data combined", icon: "database", path: "/export/full-report.csv", filename: "full-report.csv", color: "#ef4444" },
   ];
 
   const pdfExports = [
@@ -87,14 +107,14 @@ export default function ReportsScreen() {
     { label: "Attendance PDF", sub: `Report for ${today}`, icon: "check-square", path: `/pdf/attendance?date=${today}`, filename: `attendance-${today}.pdf`, color: "#22c55e" },
     { label: "Check-in PDF", sub: `Campus check-ins for ${today}`, icon: "log-in", path: `/pdf/checkins?date=${today}`, filename: `checkins-${today}.pdf`, color: "#8b5cf6" },
     { label: "Activity Logs PDF", sub: "Staff activity history", icon: "activity", path: "/pdf/activity-logs", filename: "activity-logs.pdf", color: "#6366f1" },
-    { label: "Full Report PDF", sub: "Complete campus report", icon: "database", path: "/pdf/full-report", filename: "full-report.pdf", color: "#ef4444" },
+    { label: "Full Report PDF", sub: isSuperAdmin ? "Complete campus report" : "Assigned-hostel report", icon: "database", path: "/pdf/full-report", filename: "full-report.pdf", color: "#ef4444" },
   ];
 
   const statCards = [
     { label: "Total Students", value: summary?.totalStudents, icon: "users", color: theme.tint },
     { label: "Total Hostels", value: summary?.totalHostels, icon: "home", color: "#22c55e" },
     { label: "Lost Items", value: summary?.totalLostItems, icon: "search", color: "#f59e0b" },
-    { label: "Active Staff", value: (activeStaff as any[]).filter(s => s.isOnline).length, icon: "activity", color: "#22c55e" },
+    { label: "Active Staff", value: activeStaff.filter(s => s.isOnline).length, icon: "activity", color: "#22c55e" },
     { label: "Items Found", value: summary?.foundItems, icon: "check-circle", color: "#22c55e" },
     { label: "Announcements", value: summary?.totalAnnouncements, icon: "volume-2", color: "#8b5cf6" },
   ];
@@ -115,7 +135,7 @@ export default function ReportsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* System Stats */}
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>System Overview</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>{`System Overview · ${scopeText}`}</Text>
         {isLoading ? <CardSkeleton /> : (
           <View style={styles.statsGrid}>
             {statCards.map(s => (

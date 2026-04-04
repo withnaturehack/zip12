@@ -7,10 +7,27 @@ const router = Router();
 
 // GET /api/hostel/contacts?hostelId=xxx
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
-  // Use query param hostelId if provided, otherwise fall back to the caller's own hostelId
   const queryHostelId = req.query.hostelId as string | undefined;
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
-  const targetHostelId = queryHostelId || user?.hostelId || "";
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const role = user.role || "";
+  const assigned = JSON.parse(user.assignedHostelIds || "[]") as string[];
+  const scoped = Array.from(new Set([...assigned, user.hostelId || ""].filter(Boolean)));
+
+  let targetHostelId = "";
+  if (role === "superadmin") {
+    targetHostelId = queryHostelId || user.hostelId || "";
+  } else {
+    if (queryHostelId && !scoped.includes(queryHostelId)) {
+      res.json([]);
+      return;
+    }
+    targetHostelId = queryHostelId || user.hostelId || scoped[0] || "";
+  }
 
   const allContacts = await db.select().from(emergencyContactsTable);
   const contacts = allContacts.filter(c =>

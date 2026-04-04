@@ -1,12 +1,123 @@
 import { Router } from "express";
 import { db, usersTable, hostelsTable, studentInventoryTable, checkinsTable } from "@workspace/db";
-import { and, eq, inArray, ilike, or, count, sql } from "drizzle-orm";
+import { and, eq, inArray, ilike, or, count, desc } from "drizzle-orm";
 import { requireAuth, requireAdmin, requireVolunteer, generateId, hashPassword, AuthRequest } from "../lib/auth.js";
+import { parse } from "csv-parse/sync";
+import { existsSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 const router = Router();
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
+}
+
+type HostelSheetStudent = {
+  rollNumber: string | null;
+  name: string | null;
+  gender: string | null;
+  allottedHostel: string | null;
+  roomNumber: string | null;
+  allottedMess: string | null;
+  remarks: string | null;
+  mobileNumber: string | null;
+  emergencyContact: string | null;
+  age: string | null;
+  email: string | null;
+  dsEs: string | null;
+};
+
+let cachedCsvPath: string | null = null;
+let cachedCsvMtimeMs = -1;
+let cachedCsvByEmail = new Map<string, HostelSheetStudent>();
+let cachedCsvByRoll = new Map<string, HostelSheetStudent>();
+
+function normalizeText(v: unknown): string {
+  return v == null ? "" : String(v).trim();
+}
+
+function normalizeEmail(v: unknown): string {
+  return normalizeText(v).toLowerCase();
+}
+
+function resolveHostelSheetPath(): string | null {
+  const envPath = process.env.HOSTEL_DATA_CSV_PATH;
+  const candidates = [
+    envPath,
+    path.resolve(process.cwd(), "attached_assets", "hostels  - Sheet2.csv"),
+    path.resolve(process.cwd(), "..", "attached_assets", "hostels  - Sheet2.csv"),
+    path.resolve(process.cwd(), "..", "..", "attached_assets", "hostels  - Sheet2.csv"),
+  ].filter(Boolean) as string[];
+
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+function toStudentCsvRow(raw: Record<string, unknown>): HostelSheetStudent {
+  return {
+    rollNumber: normalizeText(raw["Roll no."]) || null,
+    name: normalizeText(raw["Name of the Student"]) || null,
+    gender: normalizeText(raw["Gender"]) || null,
+    allottedHostel: normalizeText(raw["Allotted Hostel"]) || null,
+    roomNumber: normalizeText(raw["Room no."]) || null,
+    allottedMess: normalizeText(raw["Allotted Mess"]) || null,
+    remarks: normalizeText(raw["Remarks"]) || null,
+    mobileNumber: normalizeText(raw["Mobile no."]) || null,
+    emergencyContact: normalizeText(raw["Emergency contact"]) || null,
+    age: normalizeText(raw["Age"]) || null,
+    email: normalizeEmail(raw["Email"]) || null,
+    dsEs: normalizeText(raw["DS/ES"]) || null,
+  };
+}
+
+async function ensureHostelSheetCache() {
+  const csvPath = resolveHostelSheetPath();
+  if (!csvPath) {
+    cachedCsvPath = null;
+    cachedCsvMtimeMs = -1;
+    cachedCsvByEmail = new Map();
+    cachedCsvByRoll = new Map();
+    return;
+  }
+
+  let mtimeMs = -1;
+  try {
+    mtimeMs = statSync(csvPath).mtimeMs;
+  } catch {
+    return;
+  }
+
+  if (cachedCsvPath === csvPath && cachedCsvMtimeMs === mtimeMs) return;
+
+  try {
+    const text = await readFile(csvPath, "utf8");
+    const records = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, unknown>[];
+    const byEmail = new Map<string, HostelSheetStudent>();
+    const byRoll = new Map<string, HostelSheetStudent>();
+
+    for (const raw of records) {
+      const row = toStudentCsvRow(raw);
+      if (row.email) byEmail.set(row.email, row);
+      if (row.rollNumber) byRoll.set(row.rollNumber.toLowerCase(), row);
+    }
+
+    cachedCsvPath = csvPath;
+    cachedCsvMtimeMs = mtimeMs;
+    cachedCsvByEmail = byEmail;
+    cachedCsvByRoll = byRoll;
+  } catch {
+    // Keep API resilient even if CSV parsing fails.
+  }
+}
+
+async function getCsvSupplement(email?: string | null, rollNumber?: string | null): Promise<HostelSheetStudent | null> {
+  await ensureHostelSheetCache();
+  const em = normalizeEmail(email);
+  const rn = normalizeText(rollNumber).toLowerCase();
+  return (em && cachedCsvByEmail.get(em)) || (rn && cachedCsvByRoll.get(rn)) || null;
 }
 
 // GET /api/students — volunteers see only their hostel, coordinators/admins see assigned hostels
@@ -23,7 +134,7 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
 
   // Resolve page -> offset
-  const lim = Math.min(Number(limit), 500);
+  const lim = Math.min(Number(limit), 5000);
   const off = page ? (Number(page) - 1) * lim : Number(offset);
 
   const q = (search as string).trim();
@@ -39,10 +150,12 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     hostelFilter = [caller.hostelId];
   } else if (caller.role === "coordinator" || caller.role === "admin") {
     const assignedIds = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-    if (assignedIds.length > 0) {
-      hostelFilter = assignedIds;
+    const scoped = Array.from(new Set([...assignedIds, caller.hostelId || ""].filter(Boolean)));
+    if (scoped.length === 0) {
+      res.json({ students: [], total: 0, page: off / lim + 1, limit: lim });
+      return;
     }
-    // Superadmin-like: if no assigned hostels, they see all (shouldn't happen in practice)
+    hostelFilter = scoped;
   }
 
   // Additional hostelId filter from query param
@@ -50,6 +163,9 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     const qh = qHostelId as string;
     if (!hostelFilter || hostelFilter.includes(qh)) {
       hostelFilter = [qh];
+    } else {
+      res.json({ students: [], total: 0, page: off / lim + 1, limit: lim });
+      return;
     }
   }
 
@@ -136,9 +252,10 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     }
   }
 
-  const students = rows.map(s => {
+  const students = await Promise.all(rows.map(async (s) => {
     const inv = inventoryMap.get(s.id);
     const checkin = checkinMap.get(s.id);
+    const csv = await getCsvSupplement(s.email, s.rollNumber);
     return {
       ...s,
       messCard: !!inv?.messCard,
@@ -146,12 +263,44 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
       messCardRevokedAt: inv?.messCardRevokedAt?.toISOString() || null,
       checkInTime: checkin?.checkInTime?.toISOString() || null,
       checkOutTime: checkin?.checkOutTime?.toISOString() || null,
+      gender: csv?.gender || null,
+      allottedHostel: csv?.allottedHostel || s.hostelName || null,
+      allottedMess: csv?.allottedMess || s.assignedMess || null,
+      remarks: csv?.remarks || null,
+      mobileNumber: csv?.mobileNumber || s.contactNumber || s.phone || null,
+      emergencyContact: csv?.emergencyContact || null,
+      age: csv?.age || null,
+      dsEs: csv?.dsEs || null,
       createdAt: s.createdAt.toISOString(),
     };
-  });
+  }));
 
   // Support both legacy (array) and new (paginated object) consumers
   res.json({ students, total: Number(total), page: Math.floor(off / lim) + 1, limit: lim });
+});
+
+// GET /api/students/:id/checkins-history
+router.get("/:id/checkins-history", requireAuth, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 30, 200);
+  const rows = await db.select({
+    id: checkinsTable.id,
+    date: checkinsTable.date,
+    checkInTime: checkinsTable.checkInTime,
+    checkOutTime: checkinsTable.checkOutTime,
+    note: checkinsTable.note,
+    hostelId: checkinsTable.hostelId,
+    createdAt: checkinsTable.createdAt,
+  }).from(checkinsTable)
+    .where(eq(checkinsTable.studentId, req.params.id))
+    .orderBy(desc(checkinsTable.checkInTime))
+    .limit(limit);
+
+  res.json(rows.map((r) => ({
+    ...r,
+    checkInTime: r.checkInTime?.toISOString() || null,
+    checkOutTime: r.checkOutTime?.toISOString() || null,
+    createdAt: r.createdAt.toISOString(),
+  })));
 });
 
 // GET /api/students/:id
@@ -192,6 +341,8 @@ router.get("/:id", requireAuth, async (req, res) => {
     eq(checkinsTable.date, todayStr()),
   ));
 
+  const csv = await getCsvSupplement(student.email, student.rollNumber);
+
   res.json({
     ...student,
     messCard: !!inv?.messCard,
@@ -199,6 +350,14 @@ router.get("/:id", requireAuth, async (req, res) => {
     messCardRevokedAt: inv?.messCardRevokedAt?.toISOString() || null,
     checkInTime: todayCheckin?.checkInTime?.toISOString() || null,
     checkOutTime: todayCheckin?.checkOutTime?.toISOString() || null,
+    gender: csv?.gender || null,
+    allottedHostel: csv?.allottedHostel || student.hostelName || null,
+    allottedMess: csv?.allottedMess || student.assignedMess || null,
+    remarks: csv?.remarks || null,
+    mobileNumber: csv?.mobileNumber || student.contactNumber || student.phone || null,
+    emergencyContact: csv?.emergencyContact || null,
+    age: csv?.age || null,
+    dsEs: csv?.dsEs || null,
     createdAt: student.createdAt.toISOString(),
   });
 });

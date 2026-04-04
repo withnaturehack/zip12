@@ -21,7 +21,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30000,
+      staleTime: 15000,
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: true,
     },
   },
 });
@@ -34,7 +36,6 @@ function AuthGuard() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === "auth";
-    const inTabs = segments[0] === "(tabs)";
 
     if (!user && !inAuthGroup) {
       router.replace("/auth");

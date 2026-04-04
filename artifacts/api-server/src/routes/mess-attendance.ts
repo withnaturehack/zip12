@@ -1,17 +1,35 @@
 import { Router } from "express";
 import { db, messAttendanceTable, usersTable, studentInventoryTable } from "@workspace/db";
-import { eq, and, desc, inArray } from "drizzle-orm";
-import { requireAuth, requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
+import { eq, and, desc } from "drizzle-orm";
+import { requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
 const router = Router();
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 
+function scopedHostels(caller: { role: string; hostelId: string | null; assignedHostelIds?: string | null }) {
+  if (caller.role === "superadmin") return null;
+  if (caller.role === "volunteer") return [caller.hostelId || ""].filter(Boolean);
+  const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
+  return Array.from(new Set([...(assigned || []), caller.hostelId || ""].filter(Boolean)));
+}
+
+function canAccessHostel(scope: string[] | null, hostelId?: string | null) {
+  if (!scope) return true;
+  if (!hostelId) return false;
+  return scope.includes(hostelId);
+}
+
 // POST /api/mess-attendance/:studentId — mark/toggle a student for a specific meal
 router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
-  const { studentId } = req.params;
+  const studentId = String(req.params.studentId);
   const { meal, present = "true", date } = req.body;
   const targetDate = date || todayStr();
+
+  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
+    .from(usersTable).where(eq(usersTable.id, req.userId!));
+  if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const scope = scopedHostels(caller);
 
   if (!meal || !["breakfast", "lunch", "dinner", "snacks"].includes(meal)) {
     res.status(400).json({ message: "meal must be one of: breakfast, lunch, dinner, snacks" });
@@ -22,6 +40,7 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
     .from(usersTable).where(eq(usersTable.id, studentId));
 
   if (!student) { res.status(404).json({ message: "Student not found" }); return; }
+  if (!canAccessHostel(scope, student.hostelId)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   // Upsert: delete existing for this student+meal+date then re-insert
   const [existing] = await db.select().from(messAttendanceTable)
@@ -56,9 +75,15 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
 router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   const { date, hostelId: filterHostelId, meal } = req.query;
   const targetDate = (date as string) || todayStr();
+  const requestedHostelId = typeof filterHostelId === "string" ? filterHostelId : "";
 
-  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId })
+  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
+
+  if (!caller) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
 
   const rows = await db.select({
     id: messAttendanceTable.id,
@@ -82,11 +107,27 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
 
   let filtered = rows;
 
-  // Scope non-coordinator to their hostel
-  if (!COORDINATOR_ROLES.includes(caller?.role || "")) {
-    filtered = filtered.filter(r => r.hostelId === caller?.hostelId);
-  } else if (filterHostelId) {
-    filtered = filtered.filter(r => r.hostelId === filterHostelId);
+  if (caller.role === "superadmin") {
+    if (requestedHostelId) filtered = filtered.filter(r => r.hostelId === requestedHostelId);
+  } else if (caller.role === "volunteer") {
+    filtered = filtered.filter(r => r.hostelId === caller.hostelId);
+    if (requestedHostelId && requestedHostelId !== caller.hostelId) {
+      res.json([]);
+      return;
+    }
+    if (requestedHostelId) filtered = filtered.filter(r => r.hostelId === requestedHostelId);
+  } else {
+    const scoped = Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+    if (scoped.length === 0) {
+      res.json([]);
+      return;
+    }
+    if (requestedHostelId && !scoped.includes(requestedHostelId)) {
+      res.json([]);
+      return;
+    }
+    filtered = filtered.filter(r => scoped.includes(r.hostelId || ""));
+    if (requestedHostelId) filtered = filtered.filter(r => r.hostelId === requestedHostelId);
   }
 
   if (meal) filtered = filtered.filter(r => r.meal === meal);
@@ -101,8 +142,13 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
 
 // GET /api/mess-attendance/stats — today's mess card stats for dashboard
 router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
-  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId })
+  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
+
+  if (!caller) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
 
   const inventoryRows = await db.select({
     studentId: studentInventoryTable.studentId,
@@ -110,10 +156,14 @@ router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
     messCard: studentInventoryTable.messCard,
   }).from(studentInventoryTable);
 
-  let relevant = inventoryRows;
-  if (!COORDINATOR_ROLES.includes(caller?.role || "")) {
-    relevant = inventoryRows.filter(r => r.hostelId === caller?.hostelId);
-  }
+  const relevant = caller.role === "superadmin"
+    ? inventoryRows
+    : !COORDINATOR_ROLES.includes(caller.role || "")
+      ? inventoryRows.filter(r => r.hostelId === caller.hostelId)
+      : (() => {
+        const scoped = Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+        return scoped.length ? inventoryRows.filter(r => scoped.includes(r.hostelId || "")) : [];
+      })();
 
   const cardGivenCount = relevant.filter(r => r.messCard === true).length;
 

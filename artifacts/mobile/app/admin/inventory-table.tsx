@@ -1,96 +1,144 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  View, Text, FlatList, StyleSheet, Pressable,
-  RefreshControl, Platform, useColorScheme, ActivityIndicator,
+  View, Text, FlatList, StyleSheet, Pressable, TextInput, ScrollView,
+  Platform, useColorScheme, useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as Haptics from "expo-haptics";
+import { BlurView } from "expo-blur";
 import Colors from "@/constants/colors";
-import { useApiRequest } from "@/context/AuthContext";
+import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export default function InventoryTableScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const isCompactPhone = !isWeb && width < 430;
   const topPad = (isWeb ? 67 : insets.top) + 8;
   const request = useApiRequest();
-  const qc = useQueryClient();
-  const [updatingMap, setUpdatingMap] = useState<Record<string, boolean>>({});
-  const [submittingMap, setSubmittingMap] = useState<Record<string, boolean>>({});
+  const { isVolunteer, isSuperAdmin } = useAuth();
   const [filter, setFilter] = useState<"all" | "missing" | "submitted">("all");
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [activating, setActivating] = useState(false);
 
-  const { data = [], isLoading, refetch } = useQuery({
+  const requiresShift = isVolunteer && !isSuperAdmin;
+  const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
+    queryKey: ["my-status"],
+    queryFn: () => request("/staff/me-status"),
+    enabled: requiresShift,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+  const canWork = !requiresShift || !!myStatus?.isActive;
+
+  const { data = [], isLoading, dataUpdatedAt } = useQuery({
     queryKey: ["inventory-simple"],
     queryFn: () => request("/inventory-simple"),
+    enabled: canWork,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
-    refetchInterval: 8000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
-  const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
+  const [liveNow, setLiveNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setLiveNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
-  const mutation = useMutation({
-    mutationFn: ({ studentId, field, value }: { studentId: string; field: string; value: boolean }) =>
-      request(`/inventory-simple/${studentId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [field]: value }),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["inventory-simple"] }),
-  });
+  const items = useMemo(() => {
+    const source = ((data as any[]) || []).filter(Boolean);
+    const map = new Map<string, any>();
+    for (const student of source) {
+      const roll = String(student.rollNumber || "").trim().toLowerCase();
+      const email = String(student.email || "").trim().toLowerCase();
+      const nameRoom = `${String(student.name || "").trim().toLowerCase()}|${String(student.roomNumber || "").trim().toLowerCase()}|${String(student.hostelId || "").trim().toLowerCase()}`;
+      const key = roll || email || nameRoom || String(student.id);
+      if (!map.has(key)) map.set(key, student);
+    }
+    return Array.from(map.values()) as any[];
+  }, [data]);
+  const hasAnyGiven = (inv: any) => !!(inv?.mattress || inv?.bedsheet || inv?.pillow);
+  const hasPendingGiven = (inv: any) => !!(
+    (inv?.mattress && !inv?.mattressSubmitted) ||
+    (inv?.bedsheet && !inv?.bedsheetSubmitted) ||
+    (inv?.pillow && !inv?.pillowSubmitted)
+  );
 
-  const submitMutation = useMutation({
-    mutationFn: (studentId: string) =>
-      request(`/attendance/inventory/${studentId}/submit`, { method: "POST" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["inventory-simple"] });
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-    },
-  });
+  const statusOf = (student: any): "green" | "yellow" | "red" | "black" => {
+    const inv = student?.inventory || {};
+    const isLocked = !!inv.inventoryLocked;
+    const anyGiven = hasAnyGiven(inv);
+    const pending = hasPendingGiven(inv);
+    const checkedIn = !!student?.checkInTime;
+    const checkedOut = !!student?.checkOutTime;
 
-  const toggle = useCallback(async (studentId: string, field: string, current: boolean) => {
-    if (current) return;
-    const key = `${studentId}-${field}`;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setUpdatingMap(p => ({ ...p, [key]: true }));
-    try { await mutation.mutateAsync({ studentId, field, value: true }); }
-    catch { }
-    setUpdatingMap(p => ({ ...p, [key]: false }));
-  }, [mutation]);
+    if (isLocked || (anyGiven && !pending)) return "green";
+    if (pending && checkedOut) return "red";
+    if (pending && checkedIn) return "yellow";
+    return "black";
+  };
 
-  const submitInventory = useCallback(async (studentId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSubmittingMap(p => ({ ...p, [studentId]: true }));
+  const submittedCount = items.filter(s => statusOf(s) === "green").length;
+  const checkedInPendingCount = items.filter(s => statusOf(s) === "yellow").length;
+  const checkedOutPendingCount = items.filter(s => statusOf(s) === "red").length;
+  const notTakenCount = items.filter(s => statusOf(s) === "black").length;
+  const pendingSubmitCount = checkedInPendingCount + checkedOutPendingCount;
+
+  const filteredItems = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return items.filter(s => {
+      if (q) {
+        const haystack = [s.name, s.rollNumber, s.roomNumber, s.hostelId, s.email]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (filter === "submitted") return !!s.inventory?.inventoryLocked;
+      if (filter === "missing") return hasAnyGiven(s.inventory) && hasPendingGiven(s.inventory);
+      return true;
+    });
+  }, [items, debouncedSearch, filter]);
+
+  const sortedItems = useMemo(() => {
+    const priority = { red: 0, yellow: 1, green: 2, black: 3 } as const;
+    return [...filteredItems].sort((a, b) => {
+      const sa = statusOf(a);
+      const sb = statusOf(b);
+      if (priority[sa] !== priority[sb]) return priority[sa] - priority[sb];
+
+      const ta = new Date(a?.checkOutTime || a?.checkInTime || 0).getTime();
+      const tb = new Date(b?.checkOutTime || b?.checkInTime || 0).getTime();
+      if (ta !== tb) return tb - ta;
+
+      return String(a?.name || "").localeCompare(String(b?.name || ""));
+    });
+  }, [filteredItems]);
+
+  const lastSyncAgoSec = Math.max(0, Math.floor((liveNow - dataUpdatedAt) / 1000));
+
+  const goActive = async () => {
+    setActivating(true);
     try {
-      await submitMutation.mutateAsync(studentId);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch { }
-    setSubmittingMap(p => ({ ...p, [studentId]: false }));
-  }, [submitMutation]);
-
-  const items = data as any[];
-  const withMattress = items.filter(s => s.inventory?.mattress).length;
-  const withBedsheet = items.filter(s => s.inventory?.bedsheet).length;
-  const withPillow = items.filter(s => s.inventory?.pillow).length;
-  const submittedCount = items.filter(s => s.inventory?.inventoryLocked).length;
-  const missingCount = items.filter(s => !s.inventory?.inventoryLocked).length;
-
-  const filteredItems = items.filter(s => {
-    if (filter === "submitted") return !!s.inventory?.inventoryLocked;
-    if (filter === "missing") return !s.inventory?.inventoryLocked;
-    return true;
-  });
+      await request("/staff/go-active", { method: "POST", body: JSON.stringify({}) });
+      await refetchStatus();
+    } catch {
+    } finally {
+      setActivating(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -99,35 +147,59 @@ export default function InventoryTableScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={theme.text} />
         </Pressable>
-        <Text style={[styles.title, { color: theme.text }]}>Inventory</Text>
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={[styles.title, { color: theme.text }]}>Inventory</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Live hostel issue and submit status</Text>
+          <View style={styles.liveRow}>
+            <View style={styles.liveDot} />
+            <Text style={[styles.liveText, { color: theme.textSecondary }]}>Live · updated {lastSyncAgoSec}s ago</Text>
+          </View>
+        </View>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Stats row */}
-      <View style={[styles.statsRow, { borderBottomColor: theme.border }]}>
-        <StatChip label="Mattress" count={withMattress} total={items.length} color="#6366f1" theme={theme} />
-        <StatChip label="Bedsheet" count={withBedsheet} total={items.length} color="#06b6d4" theme={theme} />
-        <StatChip label="Pillow" count={withPillow} total={items.length} color="#f59e0b" theme={theme} />
-      </View>
+      {/* Overview */}
+      {isCompactPhone ? (
+        <View style={[styles.compactOverviewWrap, { borderBottomColor: theme.border }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactOverviewRow}>
+            <CompactMetric label="Done" value={String(submittedCount)} color="#22c55e" />
+            <CompactMetric label="In+Pending" value={String(checkedInPendingCount)} color="#eab308" />
+            <CompactMetric label="Out+Pending" value={String(checkedOutPendingCount)} color="#ef4444" />
+            <CompactMetric label="Not Taken" value={String(notTakenCount)} color="#64748b" />
+            <CompactMetric label="Total" value={String(items.length)} color={theme.tint} />
+          </ScrollView>
+        </View>
+      ) : (
+        <View style={[styles.overviewCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.overviewTitle, { color: theme.text }]}>Student Status</Text>
+          <View style={styles.overviewGrid}>
+            <OverviewMetric label="Submitted" value={String(submittedCount)} color="#22c55e" />
+            <OverviewMetric label="Check-in Pending" value={String(checkedInPendingCount)} color="#eab308" />
+            <OverviewMetric label="Check-out Pending" value={String(checkedOutPendingCount)} color="#ef4444" />
+            <OverviewMetric label="Not Taken" value={String(notTakenCount)} color="#64748b" />
+            <OverviewMetric label="Pending" value={String(pendingSubmitCount)} color="#f59e0b" />
+            <OverviewMetric label="Total" value={String(items.length)} color={theme.tint} />
+          </View>
+        </View>
+      )}
 
-      {/* Submitted vs Missing summary */}
-      <View style={[styles.summaryRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <View style={styles.summaryItem}>
-          <Feather name="check-circle" size={14} color="#22c55e" />
-          <Text style={[styles.summaryNum, { color: "#22c55e" }]}>{submittedCount}</Text>
-          <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Submitted</Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
-        <View style={styles.summaryItem}>
-          <Feather name="alert-circle" size={14} color="#ef4444" />
-          <Text style={[styles.summaryNum, { color: "#ef4444" }]}>{missingCount}</Text>
-          <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Pending</Text>
-        </View>
-        <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
-        <View style={styles.summaryItem}>
-          <Feather name="users" size={14} color={theme.tint} />
-          <Text style={[styles.summaryNum, { color: theme.tint }]}>{items.length}</Text>
-          <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total</Text>
+      {/* Search */}
+      <View style={[styles.searchRow, { borderBottomColor: theme.border }]}>
+        <View style={[styles.searchBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Feather name="search" size={14} color={theme.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Search by name, roll, room…"
+            placeholderTextColor={theme.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+              <Feather name="x" size={14} color={theme.textSecondary} />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -151,10 +223,14 @@ export default function InventoryTableScreen() {
                 ? (f === "missing" ? "#ef4444" : f === "submitted" ? "#22c55e" : theme.tint)
                 : theme.textSecondary,
             }]}>
-              {f === "all" ? `All (${items.length})` : f === "missing" ? `Pending (${missingCount})` : `Done (${submittedCount})`}
+              {f === "all" ? "All" : f === "missing" ? "Pending" : "Done"}
             </Text>
           </Pressable>
         ))}
+      </View>
+
+      <View style={styles.resultsRow}>
+        <Text style={[styles.resultsText, { color: theme.textSecondary }]}>Showing {sortedItems.length} of {items.length}</Text>
       </View>
 
       {/* Table header */}
@@ -172,31 +248,50 @@ export default function InventoryTableScreen() {
         <View style={{ padding: 20 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
       ) : (
         <FlatList
-          data={filteredItems}
-          keyExtractor={(i) => i.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
+          data={sortedItems}
+          keyExtractor={(i, idx) => {
+            const roll = String(i?.rollNumber || "").trim().toLowerCase();
+            const email = String(i?.email || "").trim().toLowerCase();
+            const hostel = String(i?.hostelId || "").trim().toLowerCase();
+            const room = String(i?.roomNumber || "").trim().toLowerCase();
+            const name = String(i?.name || "").trim().toLowerCase();
+            const id = String(i?.id || "").trim();
+            return id || roll || email || `${name}|${room}|${hostel}|${idx}`;
+          }}
           contentContainerStyle={{ paddingBottom: 100 }}
-          ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border }} />}
-          ListEmptyComponent={() => (
+          removeClippedSubviews
+          windowSize={11}
+          initialNumToRender={18}
+          maxToRenderPerBatch={28}
+          updateCellsBatchingPeriod={40}
+          ListEmptyComponent={
             <View style={styles.empty}>
               <Feather name="package" size={40} color={theme.textTertiary} />
               <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                 {filter === "missing" ? "No pending inventory!" : filter === "submitted" ? "None submitted yet" : "No students found"}
               </Text>
             </View>
-          )}
+          }
           renderItem={({ item }) => {
             const inv = item.inventory || {};
-            const isLocked = !!inv.inventoryLocked;
-            const allGiven = inv.mattress && inv.bedsheet && inv.pillow;
-            const missingItems = (["mattress", "bedsheet", "pillow"] as const).filter(f => !inv[f]);
-            const isSubmitting = submittingMap[item.id];
+            const pendingSubmitItems = (["mattress", "bedsheet", "pillow"] as const).filter(f => !!inv[f] && !inv[`${f}Submitted`]);
+            const anyGiven = hasAnyGiven(inv);
+            const rowStatus = statusOf(item);
+            const isLocked = rowStatus === "green";
+            const borderLeftColor = rowStatus === "green"
+              ? "#22c55e"
+              : rowStatus === "yellow"
+                ? "#eab308"
+                : rowStatus === "red"
+                  ? "#ef4444"
+                  : "#64748b";
 
             return (
               <View style={[styles.tableRow, {
                 backgroundColor: isLocked ? "#22c55e05" : theme.background,
+                borderColor: theme.border,
                 borderLeftWidth: 3,
-                borderLeftColor: isLocked ? "#22c55e" : missingItems.length > 0 ? "#ef4444" : "#f59e0b",
+                borderLeftColor,
               }]}>
                 <View style={styles.nameCol}>
                   <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
@@ -204,55 +299,56 @@ export default function InventoryTableScreen() {
                     {item.rollNumber || ""} {item.roomNumber ? `· ${item.roomNumber}` : ""}
                   </Text>
                   {/* Missing items warning */}
-                  {!isLocked && missingItems.length > 0 && (
+                  {!isLocked && pendingSubmitItems.length > 0 && (
                     <Text style={[styles.missingText, { color: "#ef4444" }]}>
-                      Missing: {missingItems.join(", ")}
+                      Not submitted: {pendingSubmitItems.join(", ")}
                     </Text>
+                  )}
+                  {!isLocked && !anyGiven && (
+                    <Text style={[styles.missingText, { color: theme.textTertiary }]}>No inventory issued</Text>
                   )}
                 </View>
 
-                {/* Status badge + submit */}
+                {/* Status badge */}
                 <View style={styles.statusCol}>
-                  {isLocked ? (
+                  {rowStatus === "green" ? (
                     <View style={styles.submittedBadge}>
                       <Feather name="lock" size={10} color="#16a34a" />
                       <Text style={styles.submittedText}>Done</Text>
                     </View>
+                  ) : rowStatus === "red" ? (
+                    <View style={[styles.statusPill, { backgroundColor: "#fee2e2" }]}>
+                      <Text style={[styles.statusPillText, { color: "#b91c1c" }]}>Out + Pending</Text>
+                    </View>
+                  ) : rowStatus === "yellow" ? (
+                    <View style={[styles.statusPill, { backgroundColor: "#fef3c7" }]}>
+                      <Text style={[styles.statusPillText, { color: "#a16207" }]}>In + Pending</Text>
+                    </View>
                   ) : (
-                    <Pressable
-                      onPress={() => submitInventory(item.id)}
-                      disabled={isSubmitting}
-                      style={[styles.submitSmallBtn, { backgroundColor: allGiven ? "#06b6d4" : "#f59e0b", opacity: isSubmitting ? 0.6 : 1 }]}
-                    >
-                      {isSubmitting
-                        ? <ActivityIndicator size="small" color="#fff" style={{ width: 14 }} />
-                        : <Text style={styles.submitSmallText}>Submit</Text>}
-                    </Pressable>
+                    <View style={[styles.statusPill, { backgroundColor: "#334155" }]}>
+                      <Text style={[styles.statusPillText, { color: "#e2e8f0" }]}>Not Taken</Text>
+                    </View>
                   )}
                 </View>
 
-                {/* Item toggles */}
+                {/* Read-only item states */}
                 <View style={styles.toggleRow}>
                   {(["mattress", "bedsheet", "pillow"] as const).map(field => {
-                    const key = `${item.id}-${field}`;
-                    const isUpdating = updatingMap[key];
                     const val = !!inv[field];
+                    const submitted = !!inv[`${field}Submitted`];
+                    const toggleBorderColor = submitted ? "#22c55e" : val ? "#f59e0b" : "#475569";
+                    const toggleBgColor = submitted ? "#22c55e20" : val ? "#fef3c7" : "#334155";
+                    const toggleIconColor = submitted ? "#22c55e" : val ? "#a16207" : "#e2e8f0";
                     return (
-                      <Pressable
+                      <View
                         key={field}
-                        onPress={() => !isLocked && toggle(item.id, field, val)}
-                        disabled={isLocked || isUpdating}
                         style={[
                           styles.toggleBtn,
-                          { backgroundColor: val ? "#22c55e20" : theme.surface, borderColor: val ? "#22c55e" : isLocked ? theme.border : "#ef444440" },
+                          { backgroundColor: toggleBgColor, borderColor: toggleBorderColor },
                         ]}
                       >
-                        {isUpdating ? (
-                          <ActivityIndicator size="small" color={val ? "#22c55e" : "#ef4444"} />
-                        ) : (
-                          <Feather name={val ? "check" : "minus"} size={14} color={val ? "#22c55e" : isLocked ? theme.textTertiary : "#ef4444"} />
-                        )}
-                      </Pressable>
+                        <Feather name={submitted ? "check-circle" : val ? "clock" : "minus"} size={14} color={toggleIconColor} />
+                      </View>
                     );
                   })}
                 </View>
@@ -261,53 +357,97 @@ export default function InventoryTableScreen() {
           }}
         />
       )}
+
+      {!canWork && (
+        <View style={styles.lockOverlay}>
+          <BlurView intensity={70} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Feather name="lock" size={20} color={theme.textSecondary} />
+            <Text style={[styles.lockTitle, { color: theme.text }]}>Shift inactive</Text>
+            <Text style={[styles.lockSub, { color: theme.textSecondary }]}>Start shift to access attendance, inventory and student data.</Text>
+            <Pressable
+              onPress={goActive}
+              disabled={activating}
+              style={[styles.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1 }]}
+            >
+              <Text style={styles.lockBtnText}>{activating ? "Starting..." : "Go Active"}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
-function StatChip({ label, count, total, color, theme }: any) {
+function OverviewMetric({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <View style={[styles.statChip, { backgroundColor: color + "15", borderColor: color + "40" }]}>
-      <Text style={[styles.statCount, { color }]}>{count}/{total}</Text>
-      <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</Text>
+    <View style={[styles.metricCard, { borderColor: color + "35", backgroundColor: color + "12" }]}>
+      <Text style={[styles.metricValue, { color }]}>{value}</Text>
+      <Text style={[styles.metricLabel, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+function CompactMetric({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <View style={[styles.compactMetric, { borderColor: color + "40", backgroundColor: color + "12" }]}>
+      <Text style={[styles.compactMetricValue, { color }]}>{value}</Text>
+      <Text style={[styles.compactMetricLabel, { color }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingBottom: 8, borderBottomWidth: 1, gap: 8 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center" },
-  statsRow: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 10, borderBottomWidth: 1 },
-  statChip: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, borderWidth: 1, gap: 2 },
-  statCount: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  summaryRow: { flexDirection: "row", paddingVertical: 12, borderBottomWidth: 1 },
-  summaryItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  summaryDivider: { width: 1 },
-  summaryNum: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  summaryLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  filterRow: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8, gap: 8, borderBottomWidth: 1 },
-  filterBtn: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
+  title: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center", lineHeight: 24 },
+  subtitle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  liveRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
+  liveDot: { width: 6, height: 6, borderRadius: 99, backgroundColor: "#22c55e" },
+  liveText: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  compactOverviewWrap: { borderBottomWidth: 1, paddingTop: 4, paddingBottom: 4 },
+  compactOverviewRow: { paddingHorizontal: 14, gap: 6 },
+  compactMetric: { minWidth: 92, borderRadius: 8, borderWidth: 1, paddingVertical: 5, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
+  compactMetricValue: { fontSize: 14, fontFamily: "Inter_700Bold", lineHeight: 16 },
+  compactMetricLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", lineHeight: 12 },
+  overviewCard: { marginHorizontal: 14, marginTop: 6, borderRadius: 12, borderWidth: 1, padding: 8, gap: 6 },
+  overviewTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  overviewGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  metricCard: { width: "31.8%", borderRadius: 8, borderWidth: 1, paddingVertical: 6, alignItems: "center", justifyContent: "center", gap: 1 },
+  metricValue: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  metricLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  searchRow: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 5 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+  filterRow: { flexDirection: "row", paddingHorizontal: 14, paddingVertical: 7, gap: 8, borderBottomWidth: 0 },
+  filterBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   filterBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  resultsRow: { paddingHorizontal: 14, paddingBottom: 6 },
+  resultsText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   tableHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
   thName: { flex: 1, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   thStatus: { width: 58, textAlign: "center", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   thItems: { flexDirection: "row", gap: 6 },
   thItem: { width: 36, textAlign: "center", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
-  tableRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, paddingLeft: 10 },
+  tableRow: { flexDirection: "row", alignItems: "center", marginHorizontal: 12, marginTop: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, paddingLeft: 10 },
   nameCol: { flex: 1, marginRight: 6 },
-  studentName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  studentMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  studentMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
   missingText: { fontSize: 10, fontFamily: "Inter_600SemiBold", marginTop: 2 },
   statusCol: { width: 58, alignItems: "center" },
   submittedBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#dcfce7", paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 },
   submittedText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#16a34a" },
-  submitSmallBtn: { paddingHorizontal: 6, paddingVertical: 5, borderRadius: 6, alignItems: "center", justifyContent: "center", minWidth: 50 },
-  submitSmallText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" },
+  statusPill: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 6 },
+  statusPillText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   toggleRow: { flexDirection: "row", gap: 6 },
   toggleBtn: { width: 36, height: 32, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingTop: 80, gap: 12 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 20 },
+  lockCard: { borderWidth: 1, borderRadius: 14, padding: 16, alignItems: "center", gap: 8, width: "100%", maxWidth: 340 },
+  lockTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  lockSub: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
+  lockBtn: { marginTop: 4, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  lockBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
 });

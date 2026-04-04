@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, studentInventoryTable, usersTable, checkinsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth, requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
 const router = Router();
@@ -22,42 +22,119 @@ function computeLocked(inv: {
 
 // GET /api/inventory-simple — list inventory for hostel
 router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
-  const { hostelId } = req.query;
+  const { hostelId, search } = req.query;
   const [caller] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
 
-  const isCoordinator = COORDINATOR_ROLES.includes(caller.role as any);
-  const targetHostelId = hostelId ? (hostelId as string) : caller.hostelId || "";
+  const role = caller.role || "";
+  const requestedHostelId = typeof hostelId === "string" ? hostelId : "";
 
-  if (!targetHostelId && !isCoordinator) { res.json([]); return; }
+  let scopedHostelIds: string[] | null = null; // null => all hostels (superadmin only)
+  if (role === "superadmin") {
+    scopedHostelIds = null;
+  } else if (role === "volunteer") {
+    scopedHostelIds = caller.hostelId ? [caller.hostelId] : [];
+  } else if (COORDINATOR_ROLES.includes(role as any)) {
+    const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
+    scopedHostelIds = Array.from(new Set([...assigned, caller.hostelId || ""].filter(Boolean)));
+  } else {
+    scopedHostelIds = [];
+  }
 
-  const students = targetHostelId
+  if (scopedHostelIds && scopedHostelIds.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  if (requestedHostelId) {
+    if (scopedHostelIds && !scopedHostelIds.includes(requestedHostelId)) {
+      res.json([]);
+      return;
+    }
+    scopedHostelIds = [requestedHostelId];
+  }
+
+  const students = scopedHostelIds
     ? await db.select({
         id: usersTable.id, name: usersTable.name, phone: usersTable.phone,
         contactNumber: usersTable.contactNumber, rollNumber: usersTable.rollNumber,
         roomNumber: usersTable.roomNumber, hostelId: usersTable.hostelId,
-      }).from(usersTable).where(and(eq(usersTable.hostelId, targetHostelId), eq(usersTable.role, "student")))
+        email: usersTable.email,
+      }).from(usersTable).where(and(inArray(usersTable.hostelId, scopedHostelIds), eq(usersTable.role, "student")))
     : await db.select({
         id: usersTable.id, name: usersTable.name, phone: usersTable.phone,
         contactNumber: usersTable.contactNumber, rollNumber: usersTable.rollNumber,
         roomNumber: usersTable.roomNumber, hostelId: usersTable.hostelId,
+        email: usersTable.email,
       }).from(usersTable).where(eq(usersTable.role, "student"));
 
-  const inventoryRecords = targetHostelId
-    ? await db.select().from(studentInventoryTable).where(eq(studentInventoryTable.hostelId, targetHostelId))
+  const inventoryRecords = scopedHostelIds
+    ? await db.select()
+      .from(studentInventoryTable)
+      .where(inArray(studentInventoryTable.hostelId, scopedHostelIds))
     : await db.select().from(studentInventoryTable);
 
   const invMap: Record<string, any> = {};
   inventoryRecords.forEach(r => { invMap[r.studentId] = r; });
 
-  res.json(students.map(s => ({
-    ...s,
-    inventory: invMap[s.id] || {
-      mattress: false, bedsheet: false, pillow: false,
-      mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
-      messCard: false, inventoryLocked: false,
-    },
-  })));
+  const studentIds = students.map(s => s.id);
+  const studentIdSet = new Set(studentIds);
+  const todayCheckins = studentIds.length
+    ? await db.select({
+        studentId: checkinsTable.studentId,
+        checkInTime: checkinsTable.checkInTime,
+        checkOutTime: checkinsTable.checkOutTime,
+      }).from(checkinsTable).where(and(
+        eq(checkinsTable.date, todayStr()),
+        inArray(checkinsTable.studentId, studentIds),
+      ))
+    : [];
+
+  const checkinMap = new Map<string, { checkInTime: Date | null; checkOutTime: Date | null }>();
+  for (const row of todayCheckins) {
+    if (!studentIdSet.has(row.studentId)) continue;
+    const prev = checkinMap.get(row.studentId);
+    const rowTs = row.checkInTime?.getTime() || 0;
+    const prevTs = prev?.checkInTime?.getTime() || 0;
+    if (!prev || rowTs >= prevTs) {
+      checkinMap.set(row.studentId, { checkInTime: row.checkInTime, checkOutTime: row.checkOutTime });
+    }
+  }
+
+  const q = typeof search === "string" ? search.trim().toLowerCase() : "";
+  const dedupedMap = new Map<string, (typeof students)[number]>();
+  for (const s of students) {
+    const rollKey = String(s.rollNumber || "").trim().toLowerCase();
+    const emailKey = String(s.email || "").trim().toLowerCase();
+    const nameRoomKey = `${String(s.name || "").trim().toLowerCase()}|${String(s.roomNumber || "").trim().toLowerCase()}|${String(s.hostelId || "").trim().toLowerCase()}`;
+    const dedupeKey = rollKey || emailKey || nameRoomKey || s.id;
+    if (!dedupedMap.has(dedupeKey)) dedupedMap.set(dedupeKey, s);
+  }
+  const deduped = Array.from(dedupedMap.values());
+
+  const filteredStudents = q
+    ? deduped.filter((s) => {
+        const haystack = [s.name, s.rollNumber, s.roomNumber, s.hostelId, s.email]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+    : deduped;
+
+  res.json(filteredStudents.map(s => {
+    const today = checkinMap.get(s.id);
+    return {
+      ...s,
+      checkInTime: today?.checkInTime?.toISOString() || null,
+      checkOutTime: today?.checkOutTime?.toISOString() || null,
+      inventory: invMap[s.id] || {
+        mattress: false, bedsheet: false, pillow: false,
+        mattressSubmitted: false, bedsheetSubmitted: false, pillowSubmitted: false,
+        messCard: false, inventoryLocked: false,
+      },
+    };
+  }));
 });
 
 // PATCH /api/inventory-simple/:studentId — update given state (mattress/bedsheet/pillow)

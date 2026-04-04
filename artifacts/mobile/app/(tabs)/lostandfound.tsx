@@ -5,11 +5,14 @@ import {
   Modal, ScrollView, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { BlurView } from "expo-blur";
 import Colors from "@/constants/colors";
 import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const PAGE_SIZE = 30;
 
@@ -22,6 +25,7 @@ interface Student {
   rollNumber?: string;
   roomNumber?: string;
   assignedMess?: string;
+  allottedMess?: string;
   hostelId?: string;
   hostelName?: string;
   attendanceStatus?: string;
@@ -125,7 +129,7 @@ function AttendanceModal({
     if (!visible || !student) return;
     const timer = setInterval(() => {
       loadState({ silent: true });
-    }, 4000);
+    }, 1500);
     return () => clearInterval(timer);
   }, [visible, student, loadState]);
 
@@ -137,6 +141,7 @@ function AttendanceModal({
   const isCheckedOut = !!checkin?.checkOutTime;
 
   async function doAction(action: string, fn: () => Promise<any>) {
+    if (!student) return;
     setActionLoading(action);
     try {
       await fn();
@@ -185,7 +190,26 @@ function AttendanceModal({
   const canSubmitMattress = canGiveInventory && inv.mattress && !inv.mattressSubmitted;
   const canSubmitBedsheet = canGiveInventory && inv.bedsheet && !inv.bedsheetSubmitted;
   const canSubmitPillow = canGiveInventory && inv.pillow && !inv.pillowSubmitted;
-  const canCheckOut = isCheckedIn && inv.inventoryLocked;
+  const noItemsGiven = !inv.mattress && !inv.bedsheet && !inv.pillow;
+  const hasPendingGivenItems =
+    (inv.mattress && !inv.mattressSubmitted) ||
+    (inv.bedsheet && !inv.bedsheetSubmitted) ||
+    (inv.pillow && !inv.pillowSubmitted);
+  const canCheckOut = isCheckedIn;
+
+  const itemStatus = (item: "mattress" | "bedsheet" | "pillow") => {
+    const submitKey = `${item}Submitted` as "mattressSubmitted" | "bedsheetSubmitted" | "pillowSubmitted";
+    const given = !!inv[item];
+    const submitted = !!inv[submitKey];
+
+    if (!given) {
+      return { label: "Not Taken", color: "#111827", bg: "#11182720", border: "#11182740" };
+    }
+    if (submitted) {
+      return { label: "Submitted", color: "#22c55e", bg: "#22c55e20", border: "#22c55e40" };
+    }
+    return { label: "Missing", color: "#ef4444", bg: "#ef444420", border: "#ef444440" };
+  };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -201,6 +225,7 @@ function AttendanceModal({
               {student.rollNumber || student.email}
               {student.roomNumber ? ` · Room ${student.roomNumber}` : ""}
             </Text>
+            <Text style={[styles.modalSub, { color: theme.textTertiary }]}>Mess: {student.assignedMess || student.allottedMess || "—"}</Text>
           </View>
           <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={12}>
             <Feather name="x" size={22} color={theme.textSecondary} />
@@ -265,6 +290,18 @@ function AttendanceModal({
                 ))}
               </View>
 
+              <View style={styles.statusLegendRow}>
+                {(["mattress", "bedsheet", "pillow"] as const).map(item => {
+                  const status = itemStatus(item);
+                  return (
+                    <View key={`legend-${item}`} style={[styles.statusLegendChip, { backgroundColor: status.bg, borderColor: status.border }]}>
+                      <Text style={[styles.statusLegendTitle, { color: theme.text }]}>{item.charAt(0).toUpperCase() + item.slice(1)}</Text>
+                      <Text style={[styles.statusLegendValue, { color: status.color }]}>{status.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+
               {/* STEP 5–7: Submit Inventory */}
               <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>STEPS 5-7 — SUBMIT INVENTORY</Text>
               <Text style={[styles.sectionHint, { color: theme.textTertiary }]}>
@@ -321,8 +358,11 @@ function AttendanceModal({
                   theme={theme}
                 />
               </View>
-              {isCheckedIn && !inv.inventoryLocked && !isCheckedOut && (
-                <Text style={[styles.sectionHint, { color: theme.textTertiary }]}>Submit all given inventory to enable checkout</Text>
+              {isCheckedIn && hasPendingGivenItems && !isCheckedOut && (
+                <Text style={[styles.sectionHint, { color: "#ef4444" }]}>Given but not submitted inventory is marked in red.</Text>
+              )}
+              {isCheckedIn && noItemsGiven && !isCheckedOut && (
+                <Text style={[styles.sectionHint, { color: "#111827" }]}>No inventory taken, checkout is enabled</Text>
               )}
 
             </>
@@ -362,6 +402,9 @@ function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: 
         <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
           {item.rollNumber || item.email}
           {item.roomNumber ? ` · Room ${item.roomNumber}` : ""}
+        </Text>
+        <Text style={[styles.studentMeta, { color: theme.textTertiary }]} numberOfLines={1}>
+          Mess: {item.assignedMess || item.allottedMess || "—"}
         </Text>
         <Text style={[styles.timeMeta, { color: theme.textTertiary }]} numberOfLines={1}>{timeMeta}</Text>
       </View>
@@ -480,7 +523,7 @@ export default function AttendanceTab() {
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
 
-  const { user, isStudent, isCoordinator, isSuperAdmin } = useAuth();
+  const { user, isStudent, isCoordinator, isSuperAdmin, isVolunteer } = useAuth();
   const request = useApiRequest();
 
   const [search, setSearch] = useState("");
@@ -489,17 +532,30 @@ export default function AttendanceTab() {
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const debouncedSearch = useDebounce(search, 300);
 
-  const fetchStudents = useCallback(async (reset = false) => {
+  const requiresShift = isVolunteer && !isSuperAdmin;
+  const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
+    queryKey: ["my-status"],
+    queryFn: () => request("/staff/me-status"),
+    enabled: requiresShift,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+  const canWork = !requiresShift || !!myStatus?.isActive;
+
+  const fetchStudents = useCallback(async (reset = false, silent = false) => {
     if (isStudent) return;
+    if (!canWork) { setAllStudents([]); setHasMore(false); return; }
     if (!hasMore && !reset) return;
     const offset = reset ? 0 : page * PAGE_SIZE;
-    if (reset) { setAllStudents([]); setHasMore(true); }
-    setLoading(true);
+    if (reset) { setHasMore(true); }
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-      if (search.trim()) params.set("search", search.trim());
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
       const data = await request(`/students?${params}`);
       const list: any[] = Array.isArray(data) ? data : (data.students || data.data || []);
       setAllStudents(prev => reset ? list : [...prev, ...list]);
@@ -507,8 +563,8 @@ export default function AttendanceTab() {
       if (!reset) setPage(p => p + 1);
       else setPage(1);
     } catch { }
-    setLoading(false);
-  }, [isStudent, request, search, page, hasMore]);
+    if (!silent) setLoading(false);
+  }, [isStudent, request, debouncedSearch, page, hasMore, canWork]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -520,16 +576,36 @@ export default function AttendanceTab() {
     setAllStudents(prev => prev.map(s => (s.id === studentId ? { ...s, ...patch } : s)));
   }, []);
 
-  useEffect(() => { if (!isStudent) fetchStudents(true); }, [isStudent, search]);
+  useEffect(() => {
+    if (isStudent) return;
+    if (!canWork) {
+      setAllStudents([]);
+      setHasMore(false);
+      setPage(0);
+      return;
+    }
+    fetchStudents(true);
+  }, [isStudent, debouncedSearch, canWork]);
 
   useEffect(() => {
-    if (isStudent || (!isCoordinator && !isSuperAdmin)) return;
-    const intervalMs = 5000;
+    if (isStudent || (!isCoordinator && !isSuperAdmin) || !canWork) return;
+    const intervalMs = 3000;
     const timer = setInterval(() => {
-      fetchStudents(true);
+      fetchStudents(true, true);
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [isStudent, isCoordinator, isSuperAdmin, fetchStudents]);
+  }, [isStudent, isCoordinator, isSuperAdmin, fetchStudents, canWork]);
+
+  const goActive = async () => {
+    setActivating(true);
+    try {
+      await request("/staff/go-active", { method: "POST", body: JSON.stringify({}) });
+      await refetchStatus();
+    } catch {
+    } finally {
+      setActivating(false);
+    }
+  };
 
   if (isStudent) {
     return <StudentSelfView theme={theme} user={user} request={request} topPad={topPad} />;
@@ -597,12 +673,30 @@ export default function AttendanceTab() {
 
       <AttendanceModal
         student={selectedStudent}
-        visible={!!selectedStudent}
+        visible={!!selectedStudent && canWork}
         onClose={() => setSelectedStudent(null)}
         theme={theme}
         request={request}
         onDataChanged={handleStudentDataChanged}
       />
+
+      {!canWork && (
+        <View style={styles.lockOverlay}>
+          <BlurView intensity={70} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Feather name="lock" size={20} color={theme.textSecondary} />
+            <Text style={[styles.lockTitle, { color: theme.text }]}>Shift inactive</Text>
+            <Text style={[styles.lockSub, { color: theme.textSecondary }]}>Start shift to view attendance and inventory actions.</Text>
+            <Pressable
+              onPress={goActive}
+              disabled={activating}
+              style={[styles.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1 }]}
+            >
+              <Text style={styles.lockBtnText}>{activating ? "Starting..." : "Go Active"}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -645,6 +739,10 @@ const styles = StyleSheet.create({
   stepRow: { flexDirection: "row", gap: 8, marginBottom: 16, flexWrap: "wrap" },
   stepBtn: { flex: 1, minWidth: 90, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10, borderWidth: 1 },
   stepBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  statusLegendRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  statusLegendChip: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 8, alignItems: "center", gap: 2 },
+  statusLegendTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  statusLegendValue: { fontSize: 11, fontFamily: "Inter_700Bold" },
   hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
   hintText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
   // Student self view
@@ -656,4 +754,10 @@ const styles = StyleSheet.create({
   invCard: { flex: 1, alignItems: "center", padding: 14, borderRadius: 12, borderWidth: 1, gap: 6 },
   invCardLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   invCardStatus: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 20 },
+  lockCard: { borderWidth: 1, borderRadius: 14, padding: 16, alignItems: "center", gap: 8, width: "100%", maxWidth: 340 },
+  lockTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  lockSub: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
+  lockBtn: { marginTop: 4, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  lockBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
 });

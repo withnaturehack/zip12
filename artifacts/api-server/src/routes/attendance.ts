@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, attendanceTable, usersTable, studentInventoryTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
 const router = Router();
@@ -11,13 +11,27 @@ function todayStr() { return new Date().toISOString().split("T")[0]; }
 router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   const { hostelId, date } = req.query;
   const targetDate = (date as string) || todayStr();
-  const [caller] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+  const [caller] = await db.select({
+    role: usersTable.role,
+    hostelId: usersTable.hostelId,
+    assignedHostelIds: usersTable.assignedHostelIds,
+  }).from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
 
-  const isCoordPlus = COORDINATOR_ROLES.includes(caller.role || "");
-  const targetHostelId = hostelId ? (hostelId as string) : (isCoordPlus ? null : (caller.hostelId || ""));
+  const requestedHostel = hostelId ? String(hostelId) : "";
+  const scopedHostelIds = caller.role === "superadmin"
+    ? null
+    : caller.role === "volunteer"
+      ? (caller.hostelId ? [caller.hostelId] : [])
+      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
 
-  if (!isCoordPlus && !targetHostelId) { res.json([]); return; }
+  if (scopedHostelIds && scopedHostelIds.length === 0) { res.json([]); return; }
+
+  if (requestedHostel && scopedHostelIds && !scopedHostelIds.includes(requestedHostel)) {
+    res.json([]); return;
+  }
+
+  const targetHostelIds = requestedHostel ? [requestedHostel] : scopedHostelIds;
 
   const students = await db.select({
     id: usersTable.id,
@@ -30,19 +44,19 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     assignedMess: usersTable.assignedMess,
     hostelId: usersTable.hostelId,
   }).from(usersTable).where(
-    targetHostelId
-      ? and(eq(usersTable.hostelId, targetHostelId), eq(usersTable.role, "student"))
+    targetHostelIds
+      ? and(inArray(usersTable.hostelId, targetHostelIds), eq(usersTable.role, "student"))
       : eq(usersTable.role, "student")
   );
 
   const records = await db.select().from(attendanceTable).where(
-    targetHostelId
-      ? and(eq(attendanceTable.hostelId, targetHostelId), eq(attendanceTable.date, targetDate))
+    targetHostelIds
+      ? and(inArray(attendanceTable.hostelId, targetHostelIds), eq(attendanceTable.date, targetDate))
       : eq(attendanceTable.date, targetDate)
   );
 
   const inventoryRecords = await db.select().from(studentInventoryTable).where(
-    targetHostelId ? eq(studentInventoryTable.hostelId, targetHostelId) : sql`1=1`
+    targetHostelIds ? inArray(studentInventoryTable.hostelId, targetHostelIds) : sql`1=1`
   );
 
   const recordMap: Record<string, typeof records[0]> = {};
@@ -111,9 +125,28 @@ router.post("/:studentId", requireVolunteer, async (req: AuthRequest, res) => {
 });
 
 // GET /api/attendance/stats
-router.get("/stats", requireVolunteer, async (_req: AuthRequest, res) => {
+router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
   const date = todayStr();
-  const records = await db.select().from(attendanceTable).where(eq(attendanceTable.date, date));
+  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
+    .from(usersTable).where(eq(usersTable.id, req.userId!));
+
+  if (!caller) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const scopedHostelIds = caller.role === "superadmin"
+    ? null
+    : caller.role === "volunteer"
+      ? (caller.hostelId ? [caller.hostelId] : [])
+      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+
+  const records = scopedHostelIds
+    ? scopedHostelIds.length
+      ? await db.select().from(attendanceTable).where(and(eq(attendanceTable.date, date), inArray(attendanceTable.hostelId, scopedHostelIds)))
+      : []
+    : await db.select().from(attendanceTable).where(eq(attendanceTable.date, date));
+
   const entered = records.filter(r => r.status === "entered").length;
   const total = records.length;
   res.json({ date, total, entered, notEntered: total - entered });

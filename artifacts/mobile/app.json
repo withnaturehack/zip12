@@ -26,7 +26,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://localhost"
         }
       ],
       "expo-font",
@@ -37,10 +37,10 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": "https://e8e612f8-a84e-4447-a670-cb01763d33e2-00-66pn7uj8f72d.expo.pike.replit.dev/api",
+      "apiUrl": "http://localhost:8080/api",
       "router": {
-        "origin": "https://e8e612f8-a84e-4447-a670-cb01763d33e2-00-66pn7uj8f72d.expo.pike.replit.dev",
-        "headOrigin": "https://e8e612f8-a84e-4447-a670-cb01763d33e2-00-66pn7uj8f72d.expo.pike.replit.dev"
+        "origin": "https://localhost",
+        "headOrigin": "https://localhost"
       },
       "eas": {
         "projectId": "8da3ea5b-4245-4459-91f6-3f6a7e49926c"

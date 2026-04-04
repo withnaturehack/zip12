@@ -54,6 +54,11 @@ router.post("/login", async (req, res) => {
         rollNumber: user.rollNumber,
         hostelId: user.hostelId,
         roomNumber: user.roomNumber,
+        phone: user.phone,
+        contactNumber: user.contactNumber,
+        area: user.area,
+        assignedMess: user.assignedMess,
+        assignedHostelIds: user.assignedHostelIds,
         createdAt: user.createdAt.toISOString(),
       },
     });

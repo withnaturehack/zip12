@@ -38,9 +38,12 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     allUsers = allUsers.filter(u => u.hostelId === caller.hostelId && u.role === "student");
   } else if (caller.role === "coordinator" || caller.role === "admin") {
     const assignedIds = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-    if (assignedIds.length > 0) {
-      allUsers = allUsers.filter(u => assignedIds.includes(u.hostelId || ""));
+    const scoped = Array.from(new Set([...assignedIds, caller.hostelId || ""].filter(Boolean)));
+    if (scoped.length === 0) {
+      res.json({ results: [], total: 0, limit, offset });
+      return;
     }
+    allUsers = allUsers.filter(u => scoped.includes(u.hostelId || ""));
   } else if (caller.role === "student") {
     res.json({ results: [], total: 0 });
     return;

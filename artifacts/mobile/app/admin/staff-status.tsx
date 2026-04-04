@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable, Modal,
+  View, Text, StyleSheet, Pressable, Modal,
   TextInput, Platform, useColorScheme, ActivityIndicator, RefreshControl, FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -80,8 +80,36 @@ export default function StaffStatusScreen() {
   };
 
   const isActive = myStatus?.isActive ?? false;
-  const activeCount = (allStaff as any[]).filter(s => s.isOnline).length;
-  const totalStaff = (allStaff as any[]).length;
+
+  const assignedHostelIds: string[] = React.useMemo(() => {
+    try {
+      const raw: any = user?.assignedHostelIds;
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+      if (typeof raw === "string") {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }, [user?.assignedHostelIds]);
+
+  const scopedHostelIds = React.useMemo(() => {
+    if (isSuperAdmin) return null;
+    return Array.from(new Set([...(assignedHostelIds || []), user?.hostelId || ""].filter(Boolean)));
+  }, [isSuperAdmin, assignedHostelIds, user?.hostelId]);
+
+  const volunteerStaff = React.useMemo(() => {
+    const base = (allStaff as any[]).filter((s: any) => s.role === "volunteer");
+    if (!scopedHostelIds) return base;
+    if (scopedHostelIds.length === 0) return [];
+    return base.filter((s: any) => scopedHostelIds.includes(String(s.hostelId || "")));
+  }, [allStaff, scopedHostelIds]);
+
+  const activeCount = volunteerStaff.filter((s: any) => s.isOnline).length;
+  const totalStaff = volunteerStaff.length;
 
   const roleColor = (role: string) => {
     if (role === "superadmin") return "#8b5cf6";
@@ -103,7 +131,7 @@ export default function StaffStatusScreen() {
       </View>
 
       <FlatList
-        data={isCoordinator ? (allStaff as any[]) : []}
+        data={isCoordinator ? volunteerStaff : []}
         keyExtractor={s => s.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
@@ -161,14 +189,14 @@ export default function StaffStatusScreen() {
                   </View>
                   <View style={[styles.summaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Text style={[styles.summaryNum, { color: theme.text }]}>{totalStaff}</Text>
-                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total Staff</Text>
+                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Assigned Volunteers</Text>
                   </View>
                   <View style={[styles.summaryCard, { backgroundColor: "#f59e0b15", borderColor: "#f59e0b40" }]}>
                     <Text style={[styles.summaryNum, { color: "#f59e0b" }]}>{totalStaff - activeCount}</Text>
                     <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Offline</Text>
                   </View>
                 </View>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>All Staff</Text>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>{isSuperAdmin ? "All Staff" : "Assigned Volunteers"}</Text>
               </>
             )}
           </>
@@ -186,6 +214,15 @@ export default function StaffStatusScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.staffName, { color: theme.text }]}>{item.name}</Text>
               <Text style={[styles.staffEmail, { color: theme.textSecondary }]}>{item.email}</Text>
+              {!!(item.contactNumber || item.phone) && (
+                <Text style={[styles.staffMeta, { color: theme.textSecondary }]}>Contact: {item.contactNumber || item.phone}</Text>
+              )}
+              {!!(item.hostelName || item.hostelId) && (
+                <Text style={[styles.staffMeta, { color: theme.textTertiary }]}>Hostel: {item.hostelName || item.hostelId}</Text>
+              )}
+              {!!item.area && (
+                <Text style={[styles.staffMeta, { color: theme.textTertiary }]}>Area: {item.area}</Text>
+              )}
               <Text style={[styles.staffRole, { color: roleColor(item.role) }]}>
                 {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
               </Text>
@@ -270,6 +307,7 @@ const styles = StyleSheet.create({
   staffAvatarText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   staffName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   staffEmail: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  staffMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   staffRole: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 2 },
   staffRight: { alignItems: "flex-end", gap: 4 },
   onlineBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 20 },

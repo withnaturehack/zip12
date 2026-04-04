@@ -83,7 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Login failed");
     await AsyncStorage.setItem("token", data.token);
-    setState({ user: data.user, token: data.token, isLoading: false });
+    const me = await fetchMe(data.token);
+    setState({ user: me || data.user, token: data.token, isLoading: false });
   }
 
   // Returns a message string (for pending approval flow)

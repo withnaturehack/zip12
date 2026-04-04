@@ -4,7 +4,9 @@ import app from "./app.js";
 import { autoSeed } from "./autoSeed.js";
 
 const PORT = Number(process.env.PORT) || 8080;
-const WORKERS = process.env.NODE_ENV === "development" ? cpus().length : 4;
+// Keep local dev single-process for faster startup and predictable logs.
+const WORKERS = process.env.NODE_ENV === "development" ? 1 : Math.min(cpus().length, 4);
+const SHOULD_AUTO_SEED = process.env.AUTO_SEED === "true";
 
 if (cluster.isPrimary) {
   console.log(`[Cluster] Primary ${process.pid} starting ${WORKERS} workers`);
@@ -17,5 +19,10 @@ if (cluster.isPrimary) {
   app.listen(PORT, () => {
     console.log(`[Worker ${process.pid}] Listening on port ${PORT}`);
   });
-  autoSeed().catch(console.error);
+
+  if (SHOULD_AUTO_SEED) {
+    autoSeed().catch((error) => {
+      console.error("[seed] Auto-seed failed:", error);
+    });
+  }
 }

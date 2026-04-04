@@ -1,13 +1,13 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Modal,
-  TextInput, ActivityIndicator, Alert, RefreshControl,
-  Platform, useColorScheme, FlatList,
+  TextInput, ActivityIndicator, Alert,
+  Platform, useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
@@ -19,33 +19,62 @@ import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
   hostel: any; visible: boolean; onClose: () => void; theme: any; request: any;
 }) {
-  const [refreshing, setRefreshing] = useState(false);
+  const loadAllHostelStudents = useCallback(async () => {
+    if (!hostel?.id) return [];
+    const pageSize = 500;
+    let page = 1;
+    let total = Number.POSITIVE_INFINITY;
+    const acc: any[] = [];
 
-  const { data: students = [], isLoading, refetch } = useQuery<any[]>({
+    while (acc.length < total) {
+      const response = await request(`/students?hostelId=${encodeURIComponent(hostel.id)}&page=${page}&limit=${pageSize}`);
+      const batch = Array.isArray(response) ? response : (response?.students || []);
+      const parsedTotal = Array.isArray(response) ? batch.length : Number(response?.total ?? batch.length);
+      total = Number.isFinite(parsedTotal) ? parsedTotal : batch.length;
+
+      if (!batch.length) break;
+      acc.push(...batch);
+      if (batch.length < pageSize) break;
+      page += 1;
+    }
+
+    const deduped = new Map<string, any>();
+    for (const s of acc) {
+      const id = String(s?.id || "").trim();
+      const roll = String(s?.rollNumber || "").trim().toLowerCase();
+      const email = String(s?.email || "").trim().toLowerCase();
+      const key = id || roll || email;
+      if (!key) continue;
+      if (!deduped.has(key)) deduped.set(key, s);
+    }
+
+    return Array.from(deduped.values()).filter((s: any) => String(s?.hostelId || "") === String(hostel.id));
+  }, [hostel?.id, request]);
+
+  const { data: students = [], isLoading } = useQuery<any[]>({
     queryKey: ["hostel-students", hostel?.id],
-    queryFn: () => request(`/students?hostelId=${hostel?.id}&limit=200`),
+    queryFn: loadAllHostelStudents,
     enabled: visible && !!hostel?.id,
-    staleTime: 30000,
+    staleTime: 5000,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
-  const { data: contacts = [], refetch: refetchContacts } = useQuery<any[]>({
+  const { data: contacts = [] } = useQuery<any[]>({
     queryKey: ["hostel-contacts-detail", hostel?.id],
     queryFn: () => request(`/hostel/contacts?hostelId=${hostel?.id}`),
     enabled: visible && !!hostel?.id,
-    staleTime: 60000,
+    staleTime: 15000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
   });
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([refetch(), refetchContacts()]);
-    setRefreshing(false);
-  }, [refetch, refetchContacts]);
 
   if (!hostel) return null;
 
   const studentList = Array.isArray(students) ? students : (students as any).students || [];
   const roomCount = hostel.totalRooms || 0;
-  const occupiedRooms = [...new Set(studentList.filter((s: any) => s.roomNumber).map((s: any) => s.roomNumber))].length;
+  const occupiedRooms = new Set(studentList.filter((s: any) => s.roomNumber).map((s: any) => s.roomNumber)).size;
   const availableRooms = roomCount > 0 ? Math.max(0, roomCount - occupiedRooms) : null;
 
   return (
@@ -64,7 +93,6 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
 
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
           showsVerticalScrollIndicator={false}
         >
           {/* Info Cards */}
@@ -164,9 +192,10 @@ export default function HostelsAdminScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const request = useApiRequest();
-  const { isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isCoordinator, isVolunteer } = useAuth();
   const queryClient = useQueryClient();
   const isWeb = Platform.OS === "web";
+  const params = useLocalSearchParams<{ hostelId?: string }>();
 
   const [showHostel, setShowHostel] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -180,12 +209,14 @@ export default function HostelsAdminScreen() {
   const [cRole, setCRole] = useState("");
   const [cPhone, setCPhone] = useState("");
 
-  const { data: hostels, isLoading, refetch } = useQuery({
+  const { data: hostels, isLoading } = useQuery({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
-    refetchInterval: 10000,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
     staleTime: 5000,
     refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   const hostelMutation = useMutation({
@@ -208,10 +239,63 @@ export default function HostelsAdminScreen() {
     onError: (e: any) => Alert.alert("Error", e.message),
   });
 
-  const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = async () => { setRefreshing(true); await refetch(); setRefreshing(false); };
-
   const hostelList: any[] = Array.isArray(hostels) ? hostels : [];
+
+  const assignedHostelIds: string[] = useMemo(() => {
+    try {
+      const raw = user?.assignedHostelIds;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [user?.assignedHostelIds]);
+
+  const visibleHostels = useMemo(() => {
+    if (isSuperAdmin) return hostelList;
+    if (isCoordinator) {
+      const scoped = new Set([...assignedHostelIds, user?.hostelId || ""].filter(Boolean));
+      return scoped.size ? hostelList.filter((h: any) => scoped.has(h.id)) : [];
+    }
+    if (isVolunteer) {
+      return user?.hostelId ? hostelList.filter((h: any) => h.id === user.hostelId) : [];
+    }
+    return [];
+  }, [hostelList, isSuperAdmin, isVolunteer, isCoordinator, assignedHostelIds, user?.hostelId]);
+
+  React.useEffect(() => {
+    const targetId = typeof params.hostelId === "string" ? params.hostelId : "";
+    if (!targetId || !visibleHostels.length) return;
+    const target = visibleHostels.find((h: any) => String(h.id) === targetId);
+    if (!target) return;
+    setSelectedHostel(target);
+  }, [params.hostelId, visibleHostels]);
+
+  const hostelIdsKey = useMemo(() => visibleHostels.map((h: any) => h.id).join("|"), [visibleHostels]);
+
+  const { data: hostelStudentCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ["hostel-student-counts", hostelIdsKey],
+    enabled: visibleHostels.length > 0,
+    queryFn: async () => {
+      const counts = await Promise.all(
+        visibleHostels.map(async (h: any) => {
+          const response = await request(`/students?hostelId=${encodeURIComponent(h.id)}&page=1&limit=1`);
+          const total = Array.isArray(response) ? response.length : Number(response?.total ?? 0);
+          return [h.id, Number.isFinite(total) ? total : 0] as const;
+        })
+      );
+      return Object.fromEntries(counts);
+    },
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+    staleTime: 5000,
+  });
+
+  const totalStudents = useMemo(
+    () => visibleHostels.reduce((sum: number, h: any) => sum + (hostelStudentCounts[h.id] || 0), 0),
+    [visibleHostels, hostelStudentCounts]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -234,42 +318,43 @@ export default function HostelsAdminScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: isWeb ? 34 : 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         showsVerticalScrollIndicator={false}
       >
         {/* Summary row */}
-        {hostelList.length > 0 && (
+        {visibleHostels.length > 0 && (
           <View style={[styles.summaryBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.summaryItem}>
-              <Text style={[styles.summaryNum, { color: theme.tint }]}>{hostelList.length}</Text>
+              <Text style={[styles.summaryNum, { color: theme.tint }]}>{visibleHostels.length}</Text>
               <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Hostels</Text>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
             <View style={styles.summaryItem}>
               <Text style={[styles.summaryNum, { color: "#22c55e" }]}>
-                {hostelList.reduce((s: number, h: any) => s + (h.totalRooms || 0), 0)}
+                {totalStudents}
               </Text>
-              <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total Rooms</Text>
+              <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Students</Text>
             </View>
             <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
             <View style={styles.summaryItem}>
-              <Text style={[styles.summaryNum, { color: "#f59e0b" }]}>Tap to view</Text>
-              <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Details</Text>
+              <Text style={[styles.summaryNum, { color: "#f59e0b" }]}>
+                {visibleHostels.reduce((s: number, h: any) => s + (h.totalRooms || 0), 0)}
+              </Text>
+              <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total Rooms</Text>
             </View>
           </View>
         )}
 
         {isLoading ? (
           <><CardSkeleton /><CardSkeleton /></>
-        ) : !hostelList.length ? (
+        ) : !visibleHostels.length ? (
           <View style={styles.emptyState}>
             <Feather name="home" size={40} color={theme.textTertiary} />
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              {isSuperAdmin ? "No hostels yet. Tap + to add one." : "No hostels found."}
+              {isSuperAdmin ? "No hostels yet. Tap + to add one." : "No assigned hostels found."}
             </Text>
           </View>
         ) : (
-          hostelList.map((h: any) => (
+          visibleHostels.map((h: any) => (
             <Pressable
               key={h.id}
               onPress={() => { Haptics.selectionAsync(); setSelectedHostel(h); }}
@@ -286,6 +371,10 @@ export default function HostelsAdminScreen() {
                     {h.wardenName && <Text style={[styles.warden, { color: theme.textTertiary }]}>Warden: {h.wardenName}</Text>}
                   </View>
                   <View style={{ alignItems: "flex-end", gap: 4 }}>
+                    <View style={[styles.roomsBadge, { backgroundColor: "#22c55e15", borderColor: "#22c55e40" }]}>
+                      <Feather name="users" size={11} color="#22c55e" />
+                      <Text style={[styles.roomsText, { color: "#22c55e" }]}>{hostelStudentCounts[h.id] || 0} students</Text>
+                    </View>
                     {h.totalRooms ? (
                       <View style={[styles.roomsBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
                         <Feather name="layers" size={11} color={theme.tint} />
@@ -354,7 +443,7 @@ export default function HostelsAdminScreen() {
                 <Pressable onPress={() => setHostelId("")} style={[styles.hostelChip, { backgroundColor: !hostelId ? theme.tint + "20" : theme.surface, borderColor: !hostelId ? theme.tint : theme.border }]}>
                   <Text style={[styles.hostelChipText, { color: !hostelId ? theme.tint : theme.textSecondary }]}>Global</Text>
                 </Pressable>
-                {hostelList.map((h: any) => (
+                {visibleHostels.map((h: any) => (
                   <Pressable key={h.id} onPress={() => setHostelId(h.id)} style={[styles.hostelChip, { backgroundColor: hostelId === h.id ? theme.tint + "20" : theme.surface, borderColor: hostelId === h.id ? theme.tint : theme.border }]}>
                     <Text style={[styles.hostelChipText, { color: hostelId === h.id ? theme.tint : theme.textSecondary }]}>{h.name}</Text>
                   </Pressable>

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, usersTable, timeLogsTable, hostelsTable } from "@workspace/db";
-import { eq, desc, and, sql } from "drizzle-orm";
-import { requireAuth, requireAdmin, requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES, VOLUNTEER_ROLES } from "../lib/auth.js";
+import { eq, desc, sql } from "drizzle-orm";
+import { requireAdmin, requireVolunteer, generateId, AuthRequest } from "../lib/auth.js";
 
 const router = Router();
 
@@ -10,6 +10,13 @@ const ACTIVE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 function isOnline(lastActiveAt: Date | null): boolean {
   if (!lastActiveAt) return false;
   return Date.now() - new Date(lastActiveAt).getTime() < ACTIVE_THRESHOLD_MS;
+}
+
+function scopedHostelIdsForCaller(caller: { role: string; hostelId?: string | null; assignedHostelIds?: string | null }) {
+  if (caller.role === "superadmin") return null as string[] | null;
+  if (caller.role === "volunteer") return caller.hostelId ? [caller.hostelId] : [];
+  const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
+  return Array.from(new Set([...assigned, caller.hostelId || ""].filter(Boolean)));
 }
 
 // POST /api/staff/go-active — volunteer/staff marks themselves active
@@ -71,8 +78,14 @@ router.get("/me-status", requireVolunteer, async (req: AuthRequest, res) => {
 
 // GET /api/staff/active-list — who is currently active (coordinator+)
 router.get("/active-list", requireAdmin, async (req: AuthRequest, res) => {
-  const [caller] = await db.select({ role: usersTable.role, assignedHostelIds: usersTable.assignedHostelIds })
+  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
+  if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const scopedIds = scopedHostelIdsForCaller(caller);
+
+  const roleWhere = caller.role === "superadmin"
+    ? sql`users.role IN ('volunteer','coordinator','admin','superadmin')`
+    : sql`users.role = 'volunteer'`;
 
   const staff = await db.select({
     id: usersTable.id,
@@ -84,10 +97,11 @@ router.get("/active-list", requireAdmin, async (req: AuthRequest, res) => {
     hostelName: hostelsTable.name,
   }).from(usersTable)
     .leftJoin(hostelsTable, eq(usersTable.hostelId, hostelsTable.id))
-    .where(sql`users.role IN ('volunteer','coordinator','admin','superadmin') AND last_active_at > NOW() - INTERVAL '10 minutes'`)
+    .where(sql`${roleWhere} AND last_active_at > NOW() - INTERVAL '10 minutes'`)
     .orderBy(desc(usersTable.lastActiveAt));
 
-  res.json(staff.map(s => ({ ...s, isOnline: true, lastActiveAt: s.lastActiveAt?.toISOString() || null })));
+  const filtered = scopedIds ? staff.filter(s => scopedIds.includes(s.hostelId || "")) : staff;
+  res.json(filtered.map(s => ({ ...s, isOnline: true, lastActiveAt: s.lastActiveAt?.toISOString() || null })));
 });
 
 // GET /api/staff/logs — activity log with hostel-scoped filtering for coordinators
@@ -99,6 +113,8 @@ router.get("/logs", requireAdmin, async (req: AuthRequest, res) => {
 
   const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
+  if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const scopedIds = scopedHostelIdsForCaller(caller);
 
   let logs = await db.select({
     id: timeLogsTable.id,
@@ -116,6 +132,9 @@ router.get("/logs", requireAdmin, async (req: AuthRequest, res) => {
     .orderBy(desc(timeLogsTable.createdAt))
     .limit(1000);
 
+  if (scopedIds) {
+    logs = logs.filter(l => scopedIds.includes(l.hostelId || l.userHostelId || ""));
+  }
   if (userId) logs = logs.filter(l => l.userId === userId);
   if (hostelId) logs = logs.filter(l => l.hostelId === hostelId || l.userHostelId === hostelId);
 
@@ -125,8 +144,14 @@ router.get("/logs", requireAdmin, async (req: AuthRequest, res) => {
 
 // GET /api/staff/all — all staff list with online status and hostel name (coordinator+)
 router.get("/all", requireAdmin, async (req: AuthRequest, res) => {
-  const [caller] = await db.select({ role: usersTable.role, assignedHostelIds: usersTable.assignedHostelIds })
+  const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
+  if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const scopedIds = scopedHostelIdsForCaller(caller);
+
+  const roleWhere = caller.role === "superadmin"
+    ? sql`users.role IN ('volunteer','coordinator','admin','superadmin')`
+    : sql`users.role = 'volunteer'`;
 
   const staff = await db.select({
     id: usersTable.id,
@@ -143,10 +168,11 @@ router.get("/all", requireAdmin, async (req: AuthRequest, res) => {
     hostelName: hostelsTable.name,
   }).from(usersTable)
     .leftJoin(hostelsTable, eq(usersTable.hostelId, hostelsTable.id))
-    .where(sql`users.role IN ('volunteer','coordinator','admin','superadmin')`)
+    .where(roleWhere)
     .orderBy(usersTable.role, usersTable.name);
 
-  res.json(staff.map(s => ({
+  const filtered = scopedIds ? staff.filter(s => scopedIds.includes(s.hostelId || "")) : staff;
+  res.json(filtered.map(s => ({
     ...s,
     isOnline: isOnline(s.lastActiveAt),
     lastActiveAt: s.lastActiveAt?.toISOString() || null,

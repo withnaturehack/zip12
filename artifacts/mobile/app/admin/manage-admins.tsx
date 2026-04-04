@@ -31,6 +31,13 @@ const ROLE_LABELS: Record<StaffRole, string> = {
   superadmin: "Super Admin",
 };
 
+const ROLE_BADGE_VARIANTS: Record<StaffRole, "green" | "blue" | "purple" | "red"> = {
+  volunteer: "green",
+  coordinator: "blue",
+  admin: "purple",
+  superadmin: "red",
+};
+
 export default function ManageAdminsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -82,6 +89,11 @@ export default function ManageAdminsScreen() {
       request(`/admin/assign-hostel/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["hostels"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-simple"] });
+      queryClient.invalidateQueries({ queryKey: ["master-students"] });
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
       setShowAssignModal(false);
       setSelectedStaff(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -215,7 +227,10 @@ export default function ManageAdminsScreen() {
                       {isOnline && <View style={styles.onlineDot} />}
                     </View>
                     <Text style={[styles.memberEmail, { color: theme.textSecondary }]} numberOfLines={1}>{member.email}</Text>
-                    <Badge label={ROLE_LABELS[member.role as StaffRole] || member.role} color={roleColor} />
+                    <Badge
+                      label={ROLE_LABELS[member.role as StaffRole] || member.role}
+                      variant={ROLE_BADGE_VARIANTS[member.role as StaffRole] || "purple"}
+                    />
                   </View>
                   <View style={styles.actions}>
                     <Pressable onPress={() => openAssign(member)} style={[styles.actionBtn, { backgroundColor: theme.tint + "15" }]} hitSlop={4}>

@@ -91,73 +91,85 @@ export default function HomeScreen() {
   const isAdmin = user?.role === "admin" || user?.role === "coordinator";
   const assignedHostelIds: string[] = React.useMemo(() => {
     try {
-      const raw = user?.assignedHostelIds;
+      const raw: any = user?.assignedHostelIds;
       if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+      if (typeof raw === "string") {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+      }
+      return [];
     } catch { return []; }
   }, [user?.assignedHostelIds]);
+
+  const scopedHostelIds = React.useMemo(() => {
+    if (isSuperAdmin) return null;
+    if (user?.role === "volunteer") return [user?.hostelId].filter(Boolean) as string[];
+    return Array.from(new Set([...(assignedHostelIds || []), user?.hostelId || ""].filter(Boolean)));
+  }, [isSuperAdmin, user?.role, user?.hostelId, assignedHostelIds]);
 
   const { data: announcements, refetch: refetchAnn, isLoading: annLoading } = useQuery({
     queryKey: ["announcements"],
     queryFn: () => request("/announcements"),
-    staleTime: 30000,
+    staleTime: 10000,
+    refetchInterval: 15000,
   });
 
   const { data: attStats, refetch: refetchStats } = useQuery({
     queryKey: ["att-stats"],
     queryFn: () => request("/attendance/stats"),
     enabled: isVolunteer,
-    refetchInterval: isCoordinator ? 5000 : 20000,
-    staleTime: isCoordinator ? 3000 : 10000,
+    refetchInterval: isCoordinator ? 3000 : 8000,
+    staleTime: isCoordinator ? 1500 : 4000,
   });
 
   const { data: reportSummary } = useQuery({
     queryKey: ["report-summary"],
     queryFn: () => request("/reports/summary"),
     enabled: isCoordinator,
-    refetchInterval: 10000,
-    staleTime: 5000,
+    refetchInterval: 5000,
+    staleTime: 2500,
+  });
+
+  const { data: scopedStudentsMeta } = useQuery<any>({
+    queryKey: ["students-scope-total"],
+    queryFn: () => request("/students?limit=1&offset=0"),
+    enabled: isCoordinator && !isSuperAdmin,
+    refetchInterval: 8000,
+    staleTime: 3000,
   });
 
   const { data: messStats, refetch: refetchMess } = useQuery<any>({
     queryKey: ["mess-stats"],
     queryFn: () => request("/mess-attendance/stats"),
     enabled: isVolunteer,
-    refetchInterval: isCoordinator ? 5000 : 15000,
-    staleTime: isCoordinator ? 3000 : 8000,
+    refetchInterval: isCoordinator ? 3000 : 7000,
+    staleTime: isCoordinator ? 1500 : 3500,
   });
 
-  const { data: checkinStats } = useQuery<any>({
-    queryKey: ["checkin-stats"],
-    queryFn: () => request("/checkins/stats"),
-    enabled: isCoordinator,
-    refetchInterval: 5000,
-    staleTime: 3000,
-  });
 
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
     queryFn: () => request("/staff/me-status"),
-    enabled: isVolunteer,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    enabled: isVolunteer && !isSuperAdmin,
+    refetchInterval: 15000,
+    staleTime: 5000,
   });
 
   const { data: pendingCount } = useQuery<{ count: number }>({
     queryKey: ["pending-count"],
     queryFn: () => request("/approvals/count"),
     enabled: isSuperAdmin,
-    refetchInterval: 10000,
-    staleTime: 5000,
+    refetchInterval: 5000,
+    staleTime: 2500,
   });
 
   const { data: allHostels = [] } = useQuery<any[]>({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
-    enabled: isAdmin && assignedHostelIds.length > 0,
-    refetchInterval: 20000,
-    staleTime: 10000,
+    enabled: isAdmin || isVolunteer,
+    refetchInterval: 10000,
+    staleTime: 4000,
   });
 
   const assignedHostels = React.useMemo(() => {
@@ -165,16 +177,49 @@ export default function HomeScreen() {
     return (allHostels as any[]).filter((h: any) => assignedHostelIds.includes(h.id));
   }, [allHostels, assignedHostelIds]);
 
+  const profileHostelText = React.useMemo(() => {
+    if (isSuperAdmin) return "All hostels";
+    if (isStudent) return user?.hostelId ? `Hostel ${user.hostelId}` : "Hostel not assigned";
+    if (isCoordinator) {
+      if (assignedHostels.length > 0) return assignedHostels.map((h: any) => h.name).join(", ");
+      if (assignedHostelIds.length > 0) return `${assignedHostelIds.length} assigned hostel(s)`;
+      if (user?.hostelId) return `Hostel ${user.hostelId}`;
+      return "No hostel assigned";
+    }
+    if (isVolunteer) {
+      if (user?.hostelId) {
+        const own = (allHostels as any[]).find((h: any) => h.id === user.hostelId);
+        return own?.name || `Hostel ${user.hostelId}`;
+      }
+      return "No hostel assigned";
+    }
+    return "";
+  }, [isSuperAdmin, isStudent, isCoordinator, isVolunteer, assignedHostels, assignedHostelIds.length, user?.hostelId, allHostels]);
+
+  const volunteerHostelText = React.useMemo(() => {
+    if (!isVolunteer) return "";
+    if (!user?.hostelId) return "No hostel assigned";
+    const own = (allHostels as any[]).find((h: any) => h.id === user.hostelId);
+    return own?.name || `Hostel ${user.hostelId}`;
+  }, [isVolunteer, user?.hostelId, allHostels]);
+
+  const scopeLabel = isSuperAdmin ? "All hostels" : "Assigned hostels only";
+
   const { data: invStats } = useQuery<any>({
     queryKey: ["inv-stats"],
     queryFn: () => request("/inventory-simple"),
     enabled: isCoordinator,
-    refetchInterval: 8000,
-    staleTime: 5000,
+    refetchInterval: 4000,
+    staleTime: 2000,
   });
   const invStatsArr = Array.isArray(invStats) ? invStats as any[] : [];
-  const invSubmitted = invStatsArr.filter(s => s.inventory?.inventoryLocked).length;
-  const invTotal = invStatsArr.length;
+  const invScopedArr = React.useMemo(() => {
+    if (!scopedHostelIds) return invStatsArr;
+    if (scopedHostelIds.length === 0) return [];
+    return invStatsArr.filter((s: any) => scopedHostelIds.includes(String(s.hostelId || "")));
+  }, [invStatsArr, scopedHostelIds]);
+  const invSubmitted = invScopedArr.filter(s => s.inventory?.inventoryLocked).length;
+  const invTotal = invScopedArr.length;
 
   const activeStatusMutation = useMutation({
     mutationFn: ({ goActive, remark }: { goActive: boolean; remark?: string }) =>
@@ -189,7 +234,7 @@ export default function HomeScreen() {
   });
 
   useEffect(() => {
-    if (!isVolunteer || !myStatus?.isActive) {
+    if (!isVolunteer || isSuperAdmin || !myStatus?.isActive) {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       return;
     }
@@ -197,7 +242,7 @@ export default function HomeScreen() {
       try { await request("/staff/heartbeat", { method: "POST" }); } catch { }
     }, 5 * 60 * 1000);
     return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current); };
-  }, [isVolunteer, myStatus?.isActive]);
+  }, [isVolunteer, isSuperAdmin, myStatus?.isActive]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -223,6 +268,8 @@ export default function HomeScreen() {
     : "green";
 
   const isActive = myStatus?.isActive ?? false;
+  const requiresShift = isVolunteer && !isSuperAdmin;
+  const canWork = !requiresShift || isActive;
   const pendingNum = pendingCount?.count ?? 0;
 
   return (
@@ -240,12 +287,15 @@ export default function HomeScreen() {
             <Text style={[styles.heroName, { color: theme.text }]} numberOfLines={1}>
               {user?.name?.split(" ")[0] ?? "..."}
             </Text>
+            {!!profileHostelText && (
+              <Text style={[styles.heroHostel, { color: theme.textTertiary }]} numberOfLines={1}>{profileHostelText}</Text>
+            )}
           </View>
           <Badge label={roleLabel} variant={roleBadge as any} />
         </View>
 
         {/* ── Staff Status Banner ───────────────────────────────────── */}
-        {isVolunteer && (
+        {requiresShift && (
           <View style={[styles.statusBanner, {
             backgroundColor: isActive ? "#22c55e10" : "#f59e0b10",
             borderColor: isActive ? "#22c55e40" : "#f59e0b40",
@@ -280,11 +330,36 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {!canWork && (
+          <AnimatedCard style={styles.card}>
+            <View style={styles.emptyState}>
+              <Feather name="lock" size={28} color={theme.textTertiary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Shift inactive</Text>
+              <Text style={[styles.statusSub, { color: theme.textTertiary, textAlign: "center" }]}>
+                Activate shift to view hostel data and start operations.
+              </Text>
+            </View>
+          </AnimatedCard>
+        )}
+
         {/* ══════════════════════════════════════════════════════════════
              VOLUNTEER (non-coordinator) view
             ══════════════════════════════════════════════════════════════ */}
-        {isVolunteer && !isCoordinator && (
+        {isVolunteer && !isCoordinator && canWork && (
           <>
+            <SectionCard
+              icon="home"
+              iconColor={theme.tint}
+              title="Assigned Hostel"
+              sub="Your current access scope"
+              onViewAll={() => router.push("/(tabs)/hostel")}
+            >
+              <View style={{ paddingVertical: 4 }}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>{volunteerHostelText || "No hostel assigned"}</Text>
+                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>Only this hostel's data is visible in your dashboard.</Text>
+              </View>
+            </SectionCard>
+
             {/* Attendance card */}
             <SectionCard
               icon="check-square"
@@ -346,7 +421,7 @@ export default function HomeScreen() {
         {/* ══════════════════════════════════════════════════════════════
              COORDINATOR / ADMIN / SUPERADMIN view
             ══════════════════════════════════════════════════════════════ */}
-        {isCoordinator && (
+        {isCoordinator && canWork && (
           <>
             {/* Assigned Hostels */}
             {isAdmin && assignedHostels.length > 0 && (
@@ -405,10 +480,10 @@ export default function HomeScreen() {
 
             {/* System Overview */}
             {reportSummary && (
-              <SectionCard icon="bar-chart-2" iconColor={theme.tint} title="System Overview" sub="All hostels · Live">
+              <SectionCard icon="bar-chart-2" iconColor={theme.tint} title="System Overview" sub={`${scopeLabel} · Live`}>
                 <View style={styles.statsRow}>
-                  <StatBox label="Students" value={reportSummary.totalStudents} color={theme.tint} theme={theme} />
-                  <StatBox label="Hostels" value={reportSummary.totalHostels} color="#22c55e" theme={theme} />
+                  <StatBox label="Students" value={isSuperAdmin ? reportSummary.totalStudents : Number(scopedStudentsMeta?.total ?? reportSummary.totalStudents ?? 0)} color={theme.tint} theme={theme} />
+                  <StatBox label="Hostels" value={isSuperAdmin ? reportSummary.totalHostels : (scopedHostelIds?.length ?? 0)} color="#22c55e" theme={theme} />
                   <StatBox label="Alerts Sent" value={reportSummary.totalAnnouncements} color="#8b5cf6" theme={theme} />
                 </View>
               </SectionCard>
@@ -431,27 +506,12 @@ export default function HomeScreen() {
               </SectionCard>
             )}
 
-            {/* Campus Check-ins */}
-            <SectionCard
-              icon="log-in"
-              iconColor="#8b5cf6"
-              title="Campus Check-ins"
-              sub="Live · Today"
-              onViewAll={() => router.push("/(tabs)/lostandfound")}
-            >
-              <View style={styles.statsRow}>
-                <StatBox label="Checked In" value={checkinStats?.total ?? 0} color="#8b5cf6" theme={theme} />
-                <StatBox label="Checked Out" value={checkinStats?.checkedOut ?? 0} color="#6366f1" theme={theme} />
-                <StatBox label="Still Inside" value={(checkinStats?.total ?? 0) - (checkinStats?.checkedOut ?? 0)} color="#22c55e" theme={theme} />
-              </View>
-            </SectionCard>
-
             {/* Inventory */}
             <SectionCard
               icon="package"
               iconColor="#06b6d4"
               title="Inventory Status"
-              sub="Live · All Hostels"
+              sub={`Live · ${scopeLabel}`}
               onViewAll={() => router.push("/admin/inventory-table")}
             >
               <View style={styles.statsRow}>
@@ -537,34 +597,38 @@ export default function HomeScreen() {
         )}
 
         {/* ── Announcements (all roles) ──────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 8, marginTop: 4 }]}>
-          Announcements
-        </Text>
+        {canWork && (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 8, marginTop: 4 }]}>
+              Announcements
+            </Text>
 
-        {annLoading ? (
-          <View style={{ paddingHorizontal: 20 }}><CardSkeleton /><CardSkeleton /></View>
-        ) : !announcements?.length ? (
-          <AnimatedCard style={styles.card}>
-            <View style={styles.emptyState}>
-              <Feather name="bell-off" size={28} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No announcements</Text>
-            </View>
-          </AnimatedCard>
-        ) : (
-          announcements.slice(0, 5).map((a: any) => (
-            <AnimatedCard key={a.id} style={styles.card}>
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <View style={[styles.annDot, { backgroundColor: theme.tint }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.annTitle, { color: theme.text }]}>{a.title}</Text>
-                  <Text style={[styles.annBody, { color: theme.textSecondary }]} numberOfLines={2}>{a.content}</Text>
-                  <Text style={[styles.annDate, { color: theme.textTertiary }]}>
-                    {new Date(a.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                  </Text>
+            {annLoading ? (
+              <View style={{ paddingHorizontal: 20 }}><CardSkeleton /><CardSkeleton /></View>
+            ) : !announcements?.length ? (
+              <AnimatedCard style={styles.card}>
+                <View style={styles.emptyState}>
+                  <Feather name="bell-off" size={28} color={theme.textTertiary} />
+                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No announcements</Text>
                 </View>
-              </View>
-            </AnimatedCard>
-          ))
+              </AnimatedCard>
+            ) : (
+              announcements.slice(0, 5).map((a: any) => (
+                <AnimatedCard key={a.id} style={styles.card}>
+                  <View style={{ flexDirection: "row", gap: 12 }}>
+                    <View style={[styles.annDot, { backgroundColor: theme.tint }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.annTitle, { color: theme.text }]}>{a.title}</Text>
+                      <Text style={[styles.annBody, { color: theme.textSecondary }]} numberOfLines={2}>{a.content}</Text>
+                      <Text style={[styles.annDate, { color: theme.textTertiary }]}>
+                        {new Date(a.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                      </Text>
+                    </View>
+                  </View>
+                </AnimatedCard>
+              ))
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -578,6 +642,7 @@ const styles = StyleSheet.create({
   hero: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
   greeting: { fontSize: 13, fontFamily: "Inter_400Regular" },
   heroName: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  heroHostel: { fontSize: 12, fontFamily: "Inter_500Medium" },
   statusBanner: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, marginBottom: 14, padding: 14, borderRadius: 14, borderWidth: 1 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 13, fontFamily: "Inter_700Bold" },
