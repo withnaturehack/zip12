@@ -66,3 +66,8 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["eas-cli"]
+
+[userenv]
+
+[userenv.shared]
+JWT_SECRET = "f6abfd33b3d2b80c0f5f95a966c729a4a4475f307bd087b3a77911a4c4924327"
