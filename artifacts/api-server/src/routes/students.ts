@@ -38,11 +38,19 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     .leftJoin(hostelsTable, eq(usersTable.hostelId, hostelsTable.id))
     .where(eq(usersTable.role, "student"));
 
-  // Role-based filtering
+  // Role-based filtering — enforce hostel scope
   if (caller.role === "volunteer") {
     rows = rows.filter(s => s.hostelId === caller.hostelId);
-  } else if (qHostelId) {
-    rows = rows.filter(s => s.hostelId === qHostelId);
+  } else if (caller.role === "coordinator" || caller.role === "admin") {
+    const assignedIds = JSON.parse(caller.assignedHostelIds || "[]") as string[];
+    if (assignedIds.length > 0) {
+      rows = rows.filter(s => assignedIds.includes(s.hostelId || ""));
+    }
+    if (qHostelId && (assignedIds.length === 0 || assignedIds.includes(qHostelId as string))) {
+      rows = rows.filter(s => s.hostelId === qHostelId);
+    }
+  } else if (caller.role === "superadmin") {
+    if (qHostelId) rows = rows.filter(s => s.hostelId === qHostelId);
   }
 
   // Search filtering (in JS for simplicity)

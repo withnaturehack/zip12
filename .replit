@@ -71,3 +71,4 @@ packages = ["eas-cli"]
 
 [userenv.shared]
 JWT_SECRET = "f6abfd33b3d2b80c0f5f95a966c729a4a4475f307bd087b3a77911a4c4924327"
+SUPABASE_DATABASE_URL = "postgresql://postgres.fqiqyeollnnfqyqkecsd:Kartik%40152407@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?uselibpqcompat=true&sslmode=require"
