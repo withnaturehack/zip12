@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "expo-camera": "^17.0.10",
+    "expo-updates": "~29.0.16",
     "http-proxy-middleware": "^3.0.5",
     "react-native-qrcode-svg": "^6.3.21"
   }

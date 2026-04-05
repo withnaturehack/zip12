@@ -2,6 +2,7 @@
   "expo": {
     "name": "CampusOps Expo",
     "slug": "mobile",
+    "owner": "karzo15",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -43,8 +44,14 @@
         "headOrigin": "https://localhost"
       },
       "eas": {
-        "projectId": "8da3ea5b-4245-4459-91f6-3f6a7e49926c"
+        "projectId": "d15d6c97-8294-43d8-adbc-f874fb918911"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d15d6c97-8294-43d8-adbc-f874fb918911"
     }
   }
 }
