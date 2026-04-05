@@ -22,8 +22,7 @@ function InventoryStudentModal({ student, visible, onClose, theme, isDark }: {
   const inv = student.inventory || {};
   const STATUS_META = {
     green: { label: "Submitted", color: "#22c55e" },
-    yellow: { label: "Check-in · Pending", color: "#eab308" },
-    red: { label: "Checked-out · Not Submitted", color: "#ef4444" },
+    yellow: { label: "Pending", color: "#eab308" },
     black: { label: "Not Taken", color: "#64748b" },
   } as const;
   const status = statusOf(student);
@@ -167,16 +166,13 @@ function hasPendingGiven(inv: any) {
     (inv?.pillow && !inv?.pillowSubmitted)
   );
 }
-function statusOf(student: any): "green" | "yellow" | "red" | "black" {
+function statusOf(student: any): "green" | "yellow" | "black" {
   const inv = student?.inventory || {};
   const isLocked = !!inv.inventoryLocked;
   const anyGiven = hasAnyGiven(inv);
   const pending = hasPendingGiven(inv);
-  const checkedIn = !!student?.checkInTime;
-  const checkedOut = !!student?.checkOutTime;
   if (isLocked || (anyGiven && !pending)) return "green";
-  if (pending && checkedOut) return "red";
-  if (pending && checkedIn) return "yellow";
+  if (pending) return "yellow";
   return "black";
 }
 
@@ -241,10 +237,8 @@ export default function InventoryTableScreen() {
   }, [data]);
 
   const submittedCount = items.filter(s => statusOf(s) === "green").length;
-  const checkedInPendingCount = items.filter(s => statusOf(s) === "yellow").length;
-  const checkedOutPendingCount = items.filter(s => statusOf(s) === "red").length;
+  const pendingCount = items.filter(s => statusOf(s) === "yellow").length;
   const notTakenCount = items.filter(s => statusOf(s) === "black").length;
-  const pendingSubmitCount = checkedInPendingCount + checkedOutPendingCount;
 
   const filteredItems = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -261,7 +255,7 @@ export default function InventoryTableScreen() {
   }, [items, debouncedSearch, filter]);
 
   const sortedItems = useMemo(() => {
-    const priority = { red: 0, yellow: 1, green: 2, black: 3 } as const;
+    const priority = { yellow: 0, green: 1, black: 2 } as const;
     return [...filteredItems].sort((a, b) => {
       const sa = statusOf(a), sb = statusOf(b);
       if (priority[sa] !== priority[sb]) return priority[sa] - priority[sb];
@@ -305,11 +299,9 @@ export default function InventoryTableScreen() {
       {isCompactPhone ? (
         <View style={[styles.compactOverviewWrap, { borderBottomColor: theme.border }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactOverviewRow}>
-            <CompactMetric label="Done" value={String(submittedCount)} color="#22c55e" />
-            <CompactMetric label="In+Pending" value={String(checkedInPendingCount)} color="#eab308" />
-            <CompactMetric label="Out+Pending" value={String(checkedOutPendingCount)} color="#ef4444" />
+            <CompactMetric label="Submitted" value={String(submittedCount)} color="#22c55e" />
+            <CompactMetric label="Pending" value={String(pendingCount)} color="#eab308" />
             <CompactMetric label="Not Taken" value={String(notTakenCount)} color="#64748b" />
-            <CompactMetric label="Total" value={String(items.length)} color={theme.tint} />
           </ScrollView>
         </View>
       ) : (
@@ -317,11 +309,8 @@ export default function InventoryTableScreen() {
           <Text style={[styles.overviewTitle, { color: theme.text }]}>Student Status</Text>
           <View style={styles.overviewGrid}>
             <OverviewMetric label="Submitted" value={String(submittedCount)} color="#22c55e" />
-            <OverviewMetric label="Check-in Pending" value={String(checkedInPendingCount)} color="#eab308" />
-            <OverviewMetric label="Check-out Pending" value={String(checkedOutPendingCount)} color="#ef4444" />
+            <OverviewMetric label="Pending" value={String(pendingCount)} color="#eab308" />
             <OverviewMetric label="Not Taken" value={String(notTakenCount)} color="#64748b" />
-            <OverviewMetric label="Pending" value={String(pendingSubmitCount)} color="#f59e0b" />
-            <OverviewMetric label="Total" value={String(items.length)} color={theme.tint} />
           </View>
         </View>
       )}
@@ -354,16 +343,16 @@ export default function InventoryTableScreen() {
             onPress={() => setFilter(f)}
             style={[styles.filterBtn, {
               backgroundColor: filter === f
-                ? (f === "missing" ? "#ef444420" : f === "submitted" ? "#22c55e20" : theme.tint + "20")
+                ? (f === "missing" ? "#eab30820" : f === "submitted" ? "#22c55e20" : theme.tint + "20")
                 : "transparent",
               borderColor: filter === f
-                ? (f === "missing" ? "#ef444440" : f === "submitted" ? "#22c55e40" : theme.tint + "40")
+                ? (f === "missing" ? "#eab30840" : f === "submitted" ? "#22c55e40" : theme.tint + "40")
                 : "transparent",
             }]}
           >
             <Text style={[styles.filterBtnText, {
               color: filter === f
-                ? (f === "missing" ? "#ef4444" : f === "submitted" ? "#22c55e" : theme.tint)
+                ? (f === "missing" ? "#a16207" : f === "submitted" ? "#22c55e" : theme.tint)
                 : theme.textSecondary,
             }]}>
               {f === "all" ? "All" : f === "missing" ? "Pending" : "Done"}
@@ -419,7 +408,7 @@ export default function InventoryTableScreen() {
             const anyGiven = hasAnyGiven(inv);
             const rowStatus = statusOf(item);
             const isLocked = rowStatus === "green";
-            const borderLeftColor = rowStatus === "green" ? "#22c55e" : rowStatus === "yellow" ? "#eab308" : rowStatus === "red" ? "#ef4444" : "#64748b";
+            const borderLeftColor = rowStatus === "green" ? "#22c55e" : rowStatus === "yellow" ? "#eab308" : "#64748b";
 
             return (
               <Pressable
@@ -441,8 +430,8 @@ export default function InventoryTableScreen() {
                     {item.rollNumber || ""} {item.roomNumber ? `· ${item.roomNumber}` : ""}
                   </Text>
                   {!isLocked && pendingSubmitItems.length > 0 && (
-                    <Text style={[styles.missingText, { color: "#ef4444" }]}>
-                      Not submitted: {pendingSubmitItems.join(", ")}
+                    <Text style={[styles.missingText, { color: "#eab308" }]}>
+                      Pending: {pendingSubmitItems.join(", ")}
                     </Text>
                   )}
                   {!isLocked && !anyGiven && (
@@ -456,13 +445,9 @@ export default function InventoryTableScreen() {
                       <Feather name="lock" size={10} color="#16a34a" />
                       <Text style={styles.submittedText}>Done</Text>
                     </View>
-                  ) : rowStatus === "red" ? (
-                    <View style={[styles.statusPill, { backgroundColor: "#fecaca" }]}>
-                      <Text style={[styles.statusPillText, { color: "#b91c1c" }]}>Out+Pend</Text>
-                    </View>
                   ) : rowStatus === "yellow" ? (
                     <View style={[styles.statusPill, { backgroundColor: "#fef9c3" }]}>
-                      <Text style={[styles.statusPillText, { color: "#a16207" }]}>In+Pend</Text>
+                      <Text style={[styles.statusPillText, { color: "#a16207" }]}>Pending</Text>
                     </View>
                   ) : (
                     <View style={[styles.statusPill, { backgroundColor: isDark ? "#1e293b" : "#f1f5f9" }]}>

@@ -208,7 +208,7 @@ function AttendanceModal({
     if (submitted) {
       return { label: "Submitted", color: "#22c55e", bg: "#22c55e20", border: "#22c55e40" };
     }
-    return { label: "Missing", color: "#ef4444", bg: "#ef444420", border: "#ef444440" };
+    return { label: "Pending", color: "#eab308", bg: "#eab30820", border: "#eab30840" };
   };
 
   return (
