@@ -9,13 +9,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 
 const API_BASE: string =
   Platform.OS === "web"
     ? "/api"
-    : process.env.EXPO_PUBLIC_API_URL ||
+    : (Constants.expoConfig?.extra?.apiUrl as string) ||
+      process.env.EXPO_PUBLIC_API_URL ||
       "http://localhost:8080/api";
 
 const LOG_TYPES: Record<string, { icon: string; color: string; label: string }> = {

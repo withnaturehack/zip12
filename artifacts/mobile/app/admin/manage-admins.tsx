@@ -68,9 +68,10 @@ export default function ManageAdminsScreen() {
   const { data: staff, isLoading, refetch } = useQuery({
     queryKey: ["admin-users"],
     queryFn: () => request("/admin/admin-users"),
-    refetchInterval: 5000,
-    staleTime: 2000,
+    refetchInterval: 30000,
+    staleTime: 15000,
     refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: hostels } = useQuery({

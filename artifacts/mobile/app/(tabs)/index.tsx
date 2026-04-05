@@ -111,8 +111,8 @@ export default function HomeScreen() {
   const { data: announcements, refetch: refetchAnn, isLoading: annLoading } = useQuery({
     queryKey: ["announcements"],
     queryFn: () => request("/announcements"),
-    staleTime: 10000,
-    refetchInterval: 15000,
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 
   const isStaff = isVolunteer || isCoordinator || isSuperAdmin;
@@ -120,57 +120,56 @@ export default function HomeScreen() {
     queryKey: ["att-stats"],
     queryFn: () => request("/attendance/stats"),
     enabled: isStaff,
-    refetchInterval: isCoordinator ? 3000 : 6000,
-    staleTime: isCoordinator ? 1500 : 3000,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
   const { data: reportSummary } = useQuery({
     queryKey: ["report-summary"],
     queryFn: () => request("/reports/summary"),
     enabled: isCoordinator,
-    refetchInterval: 5000,
-    staleTime: 2500,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const { data: scopedStudentsMeta } = useQuery<any>({
     queryKey: ["students-scope-total"],
     queryFn: () => request("/students?limit=1&offset=0"),
     enabled: isCoordinator && !isSuperAdmin,
-    refetchInterval: 8000,
-    staleTime: 3000,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const { data: messStats, refetch: refetchMess } = useQuery<any>({
     queryKey: ["mess-stats"],
     queryFn: () => request("/mess-attendance/stats"),
     enabled: isStaff,
-    refetchInterval: isCoordinator ? 3000 : 7000,
-    staleTime: isCoordinator ? 1500 : 3500,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
-
 
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
     queryFn: () => request("/staff/me-status"),
     enabled: isVolunteer && !isSuperAdmin,
-    refetchInterval: 15000,
-    staleTime: 5000,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
   const { data: pendingCount } = useQuery<{ count: number }>({
     queryKey: ["pending-count"],
     queryFn: () => request("/approvals/count"),
     enabled: isSuperAdmin,
-    refetchInterval: 5000,
-    staleTime: 2500,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const { data: allHostels = [] } = useQuery<any[]>({
     queryKey: ["hostels"],
     queryFn: () => request("/hostels"),
     enabled: isAdmin || isVolunteer,
-    refetchInterval: 10000,
-    staleTime: 4000,
+    refetchInterval: 120000,
+    staleTime: 60000,
   });
 
   const assignedHostels = React.useMemo(() => {
