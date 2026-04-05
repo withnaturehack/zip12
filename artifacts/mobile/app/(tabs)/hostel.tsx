@@ -261,12 +261,34 @@ const StudentCard = memo(function StudentCard({
 
 // ─── Staff Students View ───────────────────────────────────────────────────────
 
-function StaffStudentsView({ theme, insets }: { theme: any; insets: any }) {
+function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any; isDark: boolean }) {
   const { user, isSuperAdmin } = useAuth();
   const request = useApiRequest();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
 
+  // ─── Shift requirement ───────────────────────────────────────────────────────
+  const requiresShift = !isSuperAdmin;
+  const [activating, setActivating] = useState(false);
+  const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
+    queryKey: ["my-status"],
+    queryFn: () => request("/staff/me-status"),
+    enabled: requiresShift,
+    refetchInterval: 20000,
+    staleTime: 10000,
+  });
+  const canWork = !requiresShift || !!myStatus?.isActive;
+
+  const goActive = async () => {
+    setActivating(true);
+    try {
+      await request("/staff/go-active", { method: "POST", body: JSON.stringify({}) });
+      await refetchStatus();
+    } catch {}
+    setActivating(false);
+  };
+
+  // ─── Hostel filter ───────────────────────────────────────────────────────────
   const assignedHostels = useMemo(() => parseAssignedHostels(user), [user?.hostelId, user?.assignedHostelIds]);
   const showHostelFilter = assignedHostels.length > 1 || isSuperAdmin;
 
@@ -294,6 +316,7 @@ function StaffStudentsView({ theme, insets }: { theme: any; insets: any }) {
   }, [request, debouncedSearch, selectedHostel]);
 
   const load = useCallback(async (reset = false) => {
+    if (!canWork) { setStudents([]); setHasMore(false); return; }
     if (loadingRef.current && !reset) return;
     loadingRef.current = true;
     if (reset) {
@@ -314,16 +337,17 @@ function StaffStudentsView({ theme, insets }: { theme: any; insets: any }) {
     loadingRef.current = false;
     setLoading(false);
     setLoadingMore(false);
-  }, [doFetch]);
+  }, [doFetch, canWork]);
 
-  // Reload on filter/search change
-  useEffect(() => { load(true); }, [debouncedSearch, selectedHostel]);
+  // Reload when shift becomes active, or filter/search changes
+  useEffect(() => { load(true); }, [debouncedSearch, selectedHostel, canWork]);
 
   // Auto-refresh every 15s
   useEffect(() => {
+    if (!canWork) return;
     const t = setInterval(() => { if (!loadingRef.current) load(true); }, 15000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, canWork]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -452,10 +476,33 @@ function StaffStudentsView({ theme, insets }: { theme: any; insets: any }) {
 
       <StudentDetailModal
         student={selectedStudent}
-        visible={!!selectedStudent}
+        visible={!!selectedStudent && canWork}
         onClose={() => setSelectedStudent(null)}
         theme={theme}
       />
+
+      {!canWork && (
+        <View style={stf.lockOverlay}>
+          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={[stf.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[stf.lockIconWrap, { backgroundColor: theme.tint + "15" }]}>
+              <Feather name="lock" size={22} color={theme.tint} />
+            </View>
+            <Text style={[stf.lockTitle, { color: theme.text }]}>Shift Not Active</Text>
+            <Text style={[stf.lockSub, { color: theme.textSecondary }]}>
+              You must start your shift before viewing student data or attendance.
+            </Text>
+            <Pressable
+              onPress={goActive}
+              disabled={activating}
+              style={[stf.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1 }]}
+            >
+              <Feather name="play-circle" size={16} color="#fff" />
+              <Text style={stf.lockBtnText}>{activating ? "Starting shift…" : "Start Shift"}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -656,7 +703,7 @@ export default function HostelTab() {
   const { isStudent } = useAuth();
 
   if (isStudent) return <StudentHostelView theme={theme} insets={insets} />;
-  return <StaffStudentsView theme={theme} insets={insets} />;
+  return <StaffStudentsView theme={theme} insets={insets} isDark={isDark} />;
 }
 
 // ─── Student Detail Styles ─────────────────────────────────────────────────────
@@ -715,6 +762,13 @@ const stf = StyleSheet.create({
   empty: { alignItems: "center", paddingTop: 80, gap: 10 },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   emptyHint: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 24 },
+  lockCard: { borderWidth: 1, borderRadius: 16, padding: 24, alignItems: "center", gap: 10, width: "100%", maxWidth: 340 },
+  lockIconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  lockTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  lockSub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  lockBtn: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  lockBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
 });
 
 // ─── Student Hostel View Styles ────────────────────────────────────────────────
