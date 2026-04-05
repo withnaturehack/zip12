@@ -6,8 +6,8 @@ import { Platform } from "react-native";
 const API_BASE: string =
   Platform.OS === "web"
     ? "/api"
-    : (Constants.expoConfig?.extra?.apiUrl as string) ||
-      process.env.EXPO_PUBLIC_API_URL ||
+    : process.env.EXPO_PUBLIC_API_URL ||
+      (Constants.expoConfig?.extra?.apiUrl as string) ||
       "http://localhost:8080/api";
 
 export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin" | "pending";

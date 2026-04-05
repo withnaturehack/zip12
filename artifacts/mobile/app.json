@@ -38,7 +38,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": "http://localhost:8080/api",
+      "apiUrl": "https://d6381017-e19d-48c6-a13b-3f3daaaafbef-00-2d65836yq2uq3.worf.replit.dev/api",
       "router": {
         "origin": "https://localhost",
         "headOrigin": "https://localhost"

@@ -16,8 +16,8 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 const API_BASE: string =
   Platform.OS === "web"
     ? "/api"
-    : (Constants.expoConfig?.extra?.apiUrl as string) ||
-      process.env.EXPO_PUBLIC_API_URL ||
+    : process.env.EXPO_PUBLIC_API_URL ||
+      (Constants.expoConfig?.extra?.apiUrl as string) ||
       "http://localhost:8080/api";
 
 const LOG_TYPES: Record<string, { icon: string; color: string; label: string }> = {

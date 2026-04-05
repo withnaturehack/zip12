@@ -18,8 +18,8 @@ import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 const API_BASE: string =
   Platform.OS === "web"
     ? "/api"
-    : (Constants.expoConfig?.extra?.apiUrl as string) ||
-      process.env.EXPO_PUBLIC_API_URL ||
+    : process.env.EXPO_PUBLIC_API_URL ||
+      (Constants.expoConfig?.extra?.apiUrl as string) ||
       "http://localhost:8080/api";
 
 export default function ReportsScreen() {
