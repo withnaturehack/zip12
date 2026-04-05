@@ -77,6 +77,115 @@ router.post("/students", requireSuperAdmin, upload.single("file"), async (req: A
   res.json({ success: true, created, updated, skipped, errors: errors.slice(0, 10) });
 });
 
+// POST /api/import/mess-by-roll — CSV with columns: Roll no., Name of the Student, Allotted Mess
+// Matches students by roll number. Creates if not found. Sets hostelId=null so all area admins can see them.
+router.post("/mess-by-roll", requireSuperAdmin, upload.single("file"), async (req: AuthRequest & Request, res: Response) => {
+  if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
+
+  const text = req.file.buffer.toString("utf8");
+  let records: any[];
+  try {
+    records = parse(text, { columns: true, skip_empty_lines: true, trim: true });
+  } catch (e: any) {
+    res.status(400).json({ error: "Invalid CSV", message: e.message });
+    return;
+  }
+
+  let updated = 0, created = 0, skipped = 0;
+  const errors: string[] = [];
+
+  const allStudents = await db.select({ id: usersTable.id, rollNumber: usersTable.rollNumber, email: usersTable.email })
+    .from(usersTable).where(eq(usersTable.role, "student"));
+  const rollMap: Record<string, string> = {};
+  allStudents.forEach(s => { if (s.rollNumber) rollMap[s.rollNumber.toLowerCase().trim()] = s.id; });
+
+  for (const row of records) {
+    const roll = (row["Roll no."] || row["roll_no"] || row["rollNumber"] || row["Roll No"] || "").trim();
+    const name = (row["Name of the Student"] || row["name"] || row["Name"] || "").trim();
+    const mess = (row["Allotted Mess"] || row["assignedMess"] || row["mess"] || "").trim();
+
+    if (!roll || !mess) { skipped++; errors.push(`Row missing roll/mess: ${JSON.stringify(row)}`); continue; }
+
+    const existingId = rollMap[roll.toLowerCase()];
+    if (existingId) {
+      await db.update(usersTable).set({
+        assignedMess: mess,
+        ...(name ? { name } : {}),
+      }).where(eq(usersTable.id, existingId));
+      updated++;
+    } else {
+      // Create new student with generated email from roll number
+      const email = `${roll.toLowerCase()}@ds.study.iitm.ac.in`;
+      const [alreadyEmail] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email));
+      if (alreadyEmail) {
+        await db.update(usersTable).set({ assignedMess: mess, ...(name ? { name } : {}) }).where(eq(usersTable.id, alreadyEmail.id));
+        updated++;
+      } else {
+        await db.insert(usersTable).values({
+          id: generateId(),
+          name: name || roll,
+          email,
+          passwordHash: hashPassword(roll),
+          role: "student",
+          rollNumber: roll,
+          assignedMess: mess,
+          hostelId: null,
+          isActive: true,
+          assignedHostelIds: "[]",
+        });
+        created++;
+      }
+    }
+  }
+
+  res.json({ success: true, updated, created, skipped, errors: errors.slice(0, 10) });
+});
+
+// POST /api/import/mess-by-roll-json — JSON body { rows: [{roll, name, mess}] }
+router.post("/mess-by-roll-json", requireSuperAdmin, async (req: AuthRequest & Request, res: Response) => {
+  const { rows } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "rows array required" });
+    return;
+  }
+
+  const allStudents = await db.select({ id: usersTable.id, rollNumber: usersTable.rollNumber })
+    .from(usersTable).where(eq(usersTable.role, "student"));
+  const rollMap: Record<string, string> = {};
+  allStudents.forEach(s => { if (s.rollNumber) rollMap[s.rollNumber.toLowerCase().trim()] = s.id; });
+
+  let updated = 0, created = 0, skipped = 0;
+
+  for (const row of rows) {
+    const roll = String(row.roll || "").trim();
+    const name = String(row.name || "").trim();
+    const mess = String(row.mess || "").trim();
+    if (!roll || !mess) { skipped++; continue; }
+
+    const existingId = rollMap[roll.toLowerCase()];
+    if (existingId) {
+      await db.update(usersTable).set({ assignedMess: mess, ...(name ? { name } : {}) }).where(eq(usersTable.id, existingId));
+      updated++;
+    } else {
+      const email = `${roll.toLowerCase()}@ds.study.iitm.ac.in`;
+      const [alreadyEmail] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email));
+      if (alreadyEmail) {
+        await db.update(usersTable).set({ assignedMess: mess, ...(name ? { name } : {}) }).where(eq(usersTable.id, alreadyEmail.id));
+        updated++;
+      } else {
+        await db.insert(usersTable).values({
+          id: generateId(), name: name || roll, email,
+          passwordHash: hashPassword(roll), role: "student",
+          rollNumber: roll, assignedMess: mess, hostelId: null,
+          isActive: true, assignedHostelIds: "[]",
+        });
+        created++;
+      }
+    }
+  }
+  res.json({ success: true, updated, created, skipped });
+});
+
 // POST /api/import/mess — CSV with columns: email,assignedMess
 router.post("/mess", requireSuperAdmin, upload.single("file"), async (req: AuthRequest & Request, res: Response) => {
   if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }

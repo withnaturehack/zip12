@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, usersTable, hostelsTable, studentInventoryTable, checkinsTable } from "@workspace/db";
-import { and, eq, inArray, ilike, or, count, desc } from "drizzle-orm";
+import { and, eq, inArray, ilike, or, count, desc, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin, requireVolunteer, generateId, hashPassword, AuthRequest } from "../lib/auth.js";
 import { parse } from "csv-parse/sync";
 import { existsSync, statSync } from "node:fs";
@@ -170,9 +170,15 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   }
 
   // Build where conditions
+  const isAreaAdmin = caller.role === "coordinator" || caller.role === "admin";
   const conditions: any[] = [eq(usersTable.role, "student")];
   if (hostelFilter) {
-    conditions.push(inArray(usersTable.hostelId, hostelFilter));
+    // Area admins also see students with no hostel assigned (mess-only students)
+    if (isAreaAdmin && !qHostelId) {
+      conditions.push(or(inArray(usersTable.hostelId, hostelFilter), isNull(usersTable.hostelId)));
+    } else {
+      conditions.push(inArray(usersTable.hostelId, hostelFilter));
+    }
   }
   if (q) {
     conditions.push(

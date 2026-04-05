@@ -129,7 +129,7 @@ router.post("/admin-users", requireSuperAdmin, async (req: AuthRequest, res) => 
     return;
   }
   const id = generateId();
-  const passwordHash = hashPassword(password);
+  const passwordHash = await hashPassword(password);
   const ids = Array.isArray(assignedHostelIds) ? assignedHostelIds : [];
   const [user] = await db.insert(usersTable)
     .values({

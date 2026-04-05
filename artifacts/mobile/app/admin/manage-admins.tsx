@@ -49,8 +49,11 @@ export default function ManageAdminsScreen() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [searchQ, setSearchQ] = useState("");
+  const [csvText, setCsvText] = useState("");
+  const [importResult, setImportResult] = useState<{updated:number,created:number,skipped:number}|null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -87,6 +90,14 @@ export default function ManageAdminsScreen() {
   const assignMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) =>
       request(`/admin/assign-hostel/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ["admin-users"] });
+      const prev = queryClient.getQueryData(["admin-users"]);
+      queryClient.setQueryData(["admin-users"], (old: any[]) =>
+        (old || []).map(s => s.id === id ? { ...s, ...data, hostelName: data.hostelName ?? s.hostelName } : s)
+      );
+      return { prev };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
@@ -98,7 +109,21 @@ export default function ManageAdminsScreen() {
       setSelectedStaff(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    onError: (e: any) => Alert.alert("Error", e.message),
+    onError: (e: any, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["admin-users"], ctx.prev);
+      Alert.alert("Error", e.message);
+    },
+  });
+
+  const importMessMutation = useMutation({
+    mutationFn: async (rows: {roll:string,name:string,mess:string}[]) =>
+      request("/import/mess-by-roll-json", { method: "POST", body: JSON.stringify({ rows }) }),
+    onSuccess: (res: any) => {
+      setImportResult(res);
+      queryClient.invalidateQueries({ queryKey: ["master-students"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (e: any) => Alert.alert("Import Error", e.message),
   });
 
   const deleteMutation = useMutation({
@@ -161,9 +186,14 @@ export default function ManageAdminsScreen() {
         <Text style={[styles.headerTitle, { color: theme.text }]}>
           Manage Admins {staff ? `(${(staff as any[]).length})` : ""}
         </Text>
-        <Pressable onPress={() => { resetCreateForm(); setShowCreateModal(true); }} style={[styles.addBtn, { backgroundColor: "#8B5CF6" }]}>
-          <Feather name="user-plus" size={18} color="#fff" />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable onPress={() => { setCsvText(""); setImportResult(null); setShowImportModal(true); }} style={[styles.addBtn, { backgroundColor: "#0EA5E9" }]}>
+            <Feather name="upload" size={18} color="#fff" />
+          </Pressable>
+          <Pressable onPress={() => { resetCreateForm(); setShowCreateModal(true); }} style={[styles.addBtn, { backgroundColor: "#8B5CF6" }]}>
+            <Feather name="user-plus" size={18} color="#fff" />
+          </Pressable>
+        </View>
       </View>
 
       <View style={[styles.searchRow, { borderColor: theme.border, backgroundColor: theme.surface }]}>
@@ -409,6 +439,65 @@ export default function ManageAdminsScreen() {
               onAssign={(data) => assignMutation.mutate({ id: selectedStaff.id, data })}
             />
           )}
+        </View>
+      </Modal>
+
+      {/* Import Mess-Only Students Modal */}
+      <Modal visible={showImportModal} animationType="slide" onRequestClose={() => setShowImportModal(false)}>
+        <View style={[styles.modal, { backgroundColor: theme.background }]}>
+          <View style={[styles.modalHeader, { borderColor: theme.border, paddingTop: (isWeb ? 20 : insets.top) + 12 }]}>
+            <View>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Import Mess Students</Text>
+              <Text style={[styles.modalSub, { color: theme.textSecondary }]}>Paste CSV: Roll no., Name of the Student, Allotted Mess</Text>
+            </View>
+            <Pressable onPress={() => setShowImportModal(false)} hitSlop={8}>
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={[styles.modalBody, { gap: 12 }]}>
+            <Text style={[styles.fieldLabel, { color: theme.text }]}>Paste CSV content below:</Text>
+            <TextInput
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface, height: 220, textAlignVertical: "top", fontFamily: "Inter_400Regular", fontSize: 12 }]}
+              value={csvText}
+              onChangeText={setCsvText}
+              multiline
+              placeholder={"Roll no.,Name of the Student,Allotted Mess\n24f2004962,Student Name,Mess 1\n..."}
+              placeholderTextColor={theme.textTertiary}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {importResult && (
+              <View style={{ backgroundColor: "#14532D22", borderRadius: 10, padding: 14, gap: 4 }}>
+                <Text style={{ color: "#22C55E", fontFamily: "Inter_700Bold", fontSize: 14 }}>Import Complete</Text>
+                <Text style={{ color: theme.textSecondary, fontFamily: "Inter_400Regular" }}>Updated: {importResult.updated} · Created: {importResult.created} · Skipped: {importResult.skipped}</Text>
+              </View>
+            )}
+            <Pressable
+              onPress={() => {
+                setImportResult(null);
+                const lines = csvText.trim().split("\n").filter(Boolean);
+                if (lines.length < 2) { Alert.alert("Error", "Need at least one data row plus header"); return; }
+                const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+                const rollIdx = headers.findIndex(h => h.includes("roll"));
+                const nameIdx = headers.findIndex(h => h.includes("name") || h.includes("student"));
+                const messIdx = headers.findIndex(h => h.includes("mess") || h.includes("allot"));
+                if (rollIdx < 0 || messIdx < 0) { Alert.alert("Error", "Cannot find Roll no. or Mess column in CSV header"); return; }
+                const rows = lines.slice(1).map(line => {
+                  const parts = line.split(",").map(p => p.trim());
+                  return { roll: parts[rollIdx] || "", name: nameIdx >= 0 ? parts[nameIdx] || "" : "", mess: parts[messIdx] || "" };
+                }).filter(r => r.roll && r.mess);
+                if (rows.length === 0) { Alert.alert("Error", "No valid rows found"); return; }
+                importMessMutation.mutate(rows);
+              }}
+              style={[styles.submitBtn, { backgroundColor: "#0EA5E9" }]}
+              disabled={importMessMutation.isPending || !csvText.trim()}
+            >
+              {importMessMutation.isPending
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.submitText}>Import {csvText.trim() ? `(${Math.max(0, csvText.trim().split("\n").length - 1)} rows)` : ""}</Text>
+              }
+            </Pressable>
+          </ScrollView>
         </View>
       </Modal>
     </View>
