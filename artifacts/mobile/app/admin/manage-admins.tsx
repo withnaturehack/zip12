@@ -50,7 +50,10 @@ export default function ManageAdminsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showResetPwModal, setShowResetPwModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
+  const [resetPwTarget, setResetPwTarget] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const [csvText, setCsvText] = useState("");
   const [importResult, setImportResult] = useState<{updated:number,created:number,skipped:number}|null>(null);
@@ -126,10 +129,35 @@ export default function ManageAdminsScreen() {
     onError: (e: any) => Alert.alert("Import Error", e.message),
   });
 
+  const resetPwMutation = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      request(`/admin/reset-password/${id}`, { method: "POST", body: JSON.stringify({ password }) }),
+    onSuccess: (res: any) => {
+      setShowResetPwModal(false);
+      setNewPassword("");
+      setResetPwTarget(null);
+      Alert.alert("Password Reset", `Password updated for ${res.name}. They can now login with the new password.`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (e: any) => Alert.alert("Reset Failed", e.message),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => request(`/admin/admin-users/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
-    onError: (e: any) => Alert.alert("Error", e.message),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["admin-users"] });
+      const prev = queryClient.getQueryData(["admin-users"]);
+      queryClient.setQueryData(["admin-users"], (old: any[]) => (old || []).filter((s: any) => s.id !== id));
+      return { prev };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (e: any, _id, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["admin-users"], ctx.prev);
+      Alert.alert("Delete Failed", e.message || "Could not remove this staff member.");
+    },
   });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -265,6 +293,9 @@ export default function ManageAdminsScreen() {
                   <View style={styles.actions}>
                     <Pressable onPress={() => openAssign(member)} style={[styles.actionBtn, { backgroundColor: theme.tint + "15" }]} hitSlop={4}>
                       <Feather name="home" size={15} color={theme.tint} />
+                    </Pressable>
+                    <Pressable onPress={() => { setResetPwTarget(member); setNewPassword(""); setShowResetPwModal(true); }} style={[styles.actionBtn, { backgroundColor: "#F5A62315" }]} hitSlop={4}>
+                      <Feather name="key" size={15} color="#F5A623" />
                     </Pressable>
                     <Pressable onPress={() => handleDelete(member)} style={[styles.actionBtn, { backgroundColor: "#EF444415" }]} hitSlop={4}>
                       <Feather name="trash-2" size={15} color="#EF4444" />
@@ -439,6 +470,57 @@ export default function ManageAdminsScreen() {
               onAssign={(data) => assignMutation.mutate({ id: selectedStaff.id, data })}
             />
           )}
+        </View>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal visible={showResetPwModal} animationType="slide" onRequestClose={() => setShowResetPwModal(false)}>
+        <View style={[styles.modal, { backgroundColor: theme.background }]}>
+          <View style={[styles.modalHeader, { borderColor: theme.border, paddingTop: (isWeb ? 20 : insets.top) + 12 }]}>
+            <View>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Reset Password</Text>
+              {resetPwTarget && (
+                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+                  {resetPwTarget.name} · {resetPwTarget.email}
+                </Text>
+              )}
+            </View>
+            <Pressable onPress={() => setShowResetPwModal(false)} hitSlop={8}>
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={[styles.modalBody, { gap: 8 }]}>
+            <Text style={[styles.fieldLabel, { color: theme.text }]}>New Password</Text>
+            <TextInput
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password (min 4 chars)"
+              placeholderTextColor={theme.textTertiary}
+              secureTextEntry={false}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={{ color: theme.textTertiary, fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 }}>
+              After resetting, share the new password with the staff member so they can login.
+            </Text>
+            <Pressable
+              onPress={() => {
+                if (!newPassword || newPassword.length < 4) {
+                  Alert.alert("Too Short", "Password must be at least 4 characters");
+                  return;
+                }
+                if (resetPwTarget) resetPwMutation.mutate({ id: resetPwTarget.id, password: newPassword });
+              }}
+              style={[styles.submitBtn, { backgroundColor: "#F5A623" }]}
+              disabled={resetPwMutation.isPending}
+            >
+              {resetPwMutation.isPending
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.submitText}>Reset Password</Text>
+              }
+            </Pressable>
+          </ScrollView>
         </View>
       </Modal>
 

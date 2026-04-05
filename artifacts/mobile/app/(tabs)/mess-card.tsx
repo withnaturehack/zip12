@@ -170,7 +170,7 @@ export default function MessCardTabScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const request = useApiRequest();
-  const { isVolunteer, isSuperAdmin } = useAuth();
+  const { isVolunteer, isSuperAdmin, user } = useAuth();
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -179,7 +179,6 @@ export default function MessCardTabScreen() {
   const [selectedDetails, setSelectedDetails] = useState<any | null>(null);
   const [open, setOpen] = useState(false);
   const [activating, setActivating] = useState(false);
-
   const requiresShift = isVolunteer && !isSuperAdmin;
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
@@ -385,23 +384,36 @@ export default function MessCardTabScreen() {
       {!canWork && (
         <View style={styles.lockOverlay}>
           <BlurView intensity={70} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-          <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.tint + "15", alignItems: "center", justifyContent: "center" }}>
-              <Feather name="lock" size={20} color={theme.tint} />
+          {!user?.hostelId && isVolunteer ? (
+            <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: "#F5A62350" }]}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#F5A62315", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="home" size={20} color="#F5A623" />
+              </View>
+              <Text style={[styles.lockTitle, { color: theme.text }]}>No Hostel Assigned</Text>
+              <Text style={[styles.lockSub, { color: theme.textSecondary }]}>
+                Your account is active but no hostel has been assigned yet. Contact your Super Admin.
+              </Text>
+              <Text style={{ color: theme.textTertiary, fontSize: 11, fontFamily: "Inter_400Regular" }}>Your login is working correctly.</Text>
             </View>
-            <Text style={[styles.lockTitle, { color: theme.text }]}>Shift Inactive</Text>
-            <Text style={[styles.lockSub, { color: theme.textSecondary }]}>
-              Start your shift to access mess card distribution.
-            </Text>
-            <Pressable
-              onPress={goActive}
-              disabled={activating}
-              style={[styles.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 8 }]}
-            >
-              <Feather name="play-circle" size={16} color="#fff" />
-              <Text style={styles.lockBtnText}>{activating ? "Starting..." : "Start Shift"}</Text>
-            </Pressable>
-          </View>
+          ) : (
+            <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.tint + "15", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="lock" size={20} color={theme.tint} />
+              </View>
+              <Text style={[styles.lockTitle, { color: theme.text }]}>Shift Inactive</Text>
+              <Text style={[styles.lockSub, { color: theme.textSecondary }]}>
+                Start your shift to access mess card distribution.
+              </Text>
+              <Pressable
+                onPress={goActive}
+                disabled={activating}
+                style={[styles.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 8 }]}
+              >
+                <Feather name="play-circle" size={16} color="#fff" />
+                <Text style={styles.lockBtnText}>{activating ? "Starting..." : "Start Shift"}</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
     </View>

@@ -484,23 +484,38 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
       {!canWork && (
         <View style={stf.lockOverlay}>
           <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-          <View style={[stf.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={[stf.lockIconWrap, { backgroundColor: theme.tint + "15" }]}>
-              <Feather name="lock" size={22} color={theme.tint} />
+          {!user?.hostelId && user?.role === "volunteer" ? (
+            <View style={[stf.lockCard, { backgroundColor: theme.surface, borderColor: "#F5A62350" }]}>
+              <View style={[stf.lockIconWrap, { backgroundColor: "#F5A62315" }]}>
+                <Feather name="home" size={22} color="#F5A623" />
+              </View>
+              <Text style={[stf.lockTitle, { color: theme.text }]}>No Hostel Assigned</Text>
+              <Text style={[stf.lockSub, { color: theme.textSecondary }]}>
+                Your account is set up but no hostel has been assigned yet. Contact your Super Admin to assign you a hostel.
+              </Text>
+              <Text style={[stf.lockSub, { color: theme.textTertiary, fontSize: 12, marginTop: 4 }]}>
+                Your login is working correctly.
+              </Text>
             </View>
-            <Text style={[stf.lockTitle, { color: theme.text }]}>Shift Not Active</Text>
-            <Text style={[stf.lockSub, { color: theme.textSecondary }]}>
-              You must start your shift before viewing student data or attendance.
-            </Text>
-            <Pressable
-              onPress={goActive}
-              disabled={activating}
-              style={[stf.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1 }]}
-            >
-              <Feather name="play-circle" size={16} color="#fff" />
-              <Text style={stf.lockBtnText}>{activating ? "Starting shift…" : "Start Shift"}</Text>
-            </Pressable>
-          </View>
+          ) : (
+            <View style={[stf.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[stf.lockIconWrap, { backgroundColor: theme.tint + "15" }]}>
+                <Feather name="lock" size={22} color={theme.tint} />
+              </View>
+              <Text style={[stf.lockTitle, { color: theme.text }]}>Shift Not Active</Text>
+              <Text style={[stf.lockSub, { color: theme.textSecondary }]}>
+                Start your shift to begin viewing student data and recording attendance.
+              </Text>
+              <Pressable
+                onPress={goActive}
+                disabled={activating}
+                style={[stf.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1 }]}
+              >
+                <Feather name="play-circle" size={16} color="#fff" />
+                <Text style={stf.lockBtnText}>{activating ? "Starting shift…" : "Start Shift"}</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
     </View>

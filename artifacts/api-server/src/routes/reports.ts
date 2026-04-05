@@ -172,6 +172,22 @@ router.patch("/admin-users/:id", requireSuperAdmin, async (req: AuthRequest, res
   });
 });
 
+// POST /api/admin/reset-password/:id — superadmin sets a new password for any staff member
+router.post("/reset-password/:id", requireSuperAdmin, async (req: AuthRequest, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 4) {
+    res.status(400).json({ error: "Bad Request", message: "Password must be at least 4 characters" });
+    return;
+  }
+  const passwordHash = await hashPassword(password);
+  const [user] = await db.update(usersTable)
+    .set({ passwordHash })
+    .where(eq(usersTable.id, req.params.id))
+    .returning({ id: usersTable.id, name: usersTable.name, email: usersTable.email });
+  if (!user) { res.status(404).json({ message: "User not found" }); return; }
+  res.json({ success: true, id: user.id, name: user.name, email: user.email });
+});
+
 // DELETE /api/admin/admin-users/:id
 router.delete("/admin-users/:id", requireSuperAdmin, async (req, res) => {
   await db.delete(usersTable).where(eq(usersTable.id, req.params.id));
