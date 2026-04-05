@@ -381,13 +381,13 @@ function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: 
   const isCurrentlyIn = hasCheckedIn && !hasCheckedOut;
 
   const attColor = isCurrentlyIn ? "#22c55e" : hasCheckedOut ? "#6366f1" : "#f59e0b";
-  const statusLabel = isCurrentlyIn ? "In" : hasCheckedOut ? "Checked Out" : "Not In Yet";
+  const statusLabel = isCurrentlyIn ? "In Campus" : hasCheckedOut ? "Checked Out" : "Pending";
 
   const checkInLabel = hasCheckedIn ? `In ${formatListTime(item.checkInTime)}` : "";
   const checkOutLabel = hasCheckedOut ? `Out ${formatListTime(item.checkOutTime)}` : "";
   const timeMeta = hasCheckedIn
     ? (checkOutLabel ? `${checkInLabel} · ${checkOutLabel}` : checkInLabel)
-    : "Not checked in yet";
+    : "Waiting to arrive";
 
   return (
     <Pressable

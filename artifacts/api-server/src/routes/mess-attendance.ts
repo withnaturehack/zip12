@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, messAttendanceTable, usersTable, studentInventoryTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
 const router = Router();
@@ -150,25 +150,40 @@ router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
     return;
   }
 
-  const inventoryRows = await db.select({
-    studentId: studentInventoryTable.studentId,
-    hostelId: studentInventoryTable.hostelId,
-    messCard: studentInventoryTable.messCard,
-  }).from(studentInventoryTable);
+  const scopedHostelIds = caller.role === "superadmin"
+    ? null
+    : caller.role === "volunteer"
+      ? (caller.hostelId ? [caller.hostelId] : [])
+      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
 
-  const relevant = caller.role === "superadmin"
-    ? inventoryRows
-    : !COORDINATOR_ROLES.includes(caller.role || "")
-      ? inventoryRows.filter(r => r.hostelId === caller.hostelId)
-      : (() => {
-        const scoped = Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
-        return scoped.length ? inventoryRows.filter(r => scoped.includes(r.hostelId || "")) : [];
-      })();
+  if (scopedHostelIds && scopedHostelIds.length === 0) {
+    res.json({ cardGivenCount: 0, totalStudents: 0, total: 0 });
+    return;
+  }
+
+  const [inventoryRows, studentRows] = await Promise.all([
+    db.select({
+      studentId: studentInventoryTable.studentId,
+      hostelId: studentInventoryTable.hostelId,
+      messCard: studentInventoryTable.messCard,
+    }).from(studentInventoryTable),
+    db.select({ id: usersTable.id }).from(usersTable).where(
+      scopedHostelIds
+        ? and(inArray(usersTable.hostelId, scopedHostelIds), eq(usersTable.role, "student"))
+        : eq(usersTable.role, "student")
+    ),
+  ]);
+
+  const relevant = scopedHostelIds
+    ? inventoryRows.filter(r => scopedHostelIds.includes(r.hostelId || ""))
+    : inventoryRows;
 
   const cardGivenCount = relevant.filter(r => r.messCard === true).length;
+  const totalStudents = studentRows.length;
 
   res.json({
     cardGivenCount,
+    totalStudents,
     total: relevant.length,
   });
 });

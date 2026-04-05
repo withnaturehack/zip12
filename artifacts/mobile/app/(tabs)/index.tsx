@@ -115,12 +115,13 @@ export default function HomeScreen() {
     refetchInterval: 15000,
   });
 
+  const isStaff = isVolunteer || isCoordinator || isSuperAdmin;
   const { data: attStats, refetch: refetchStats } = useQuery({
     queryKey: ["att-stats"],
     queryFn: () => request("/attendance/stats"),
-    enabled: isVolunteer,
-    refetchInterval: isCoordinator ? 3000 : 8000,
-    staleTime: isCoordinator ? 1500 : 4000,
+    enabled: isStaff,
+    refetchInterval: isCoordinator ? 3000 : 6000,
+    staleTime: isCoordinator ? 1500 : 3000,
   });
 
   const { data: reportSummary } = useQuery({
@@ -142,7 +143,7 @@ export default function HomeScreen() {
   const { data: messStats, refetch: refetchMess } = useQuery<any>({
     queryKey: ["mess-stats"],
     queryFn: () => request("/mess-attendance/stats"),
-    enabled: isVolunteer,
+    enabled: isStaff,
     refetchInterval: isCoordinator ? 3000 : 7000,
     staleTime: isCoordinator ? 1500 : 3500,
   });
@@ -500,9 +501,17 @@ export default function HomeScreen() {
               >
                 <View style={styles.statsRow}>
                   <StatBox label="Total" value={attStats.total} color={theme.text} theme={theme} />
-                  <StatBox label="In Campus" value={attStats.entered} color="#22c55e" theme={theme} />
-                  <StatBox label="Out" value={attStats.notEntered} color="#f59e0b" theme={theme} />
+                  <StatBox label="In Campus" value={attStats.inCampus ?? attStats.entered} color="#22c55e" theme={theme} />
+                  <StatBox label="Pending" value={attStats.pending ?? attStats.notEntered} color="#f59e0b" theme={theme} />
                 </View>
+                {(attStats.checkedOut ?? 0) > 0 && (
+                  <View style={[styles.alertRow, { backgroundColor: "#6366f110", borderColor: "#6366f130" }]}>
+                    <Feather name="log-out" size={12} color="#6366f1" />
+                    <Text style={[styles.alertText, { color: "#6366f1" }]}>
+                      {attStats.checkedOut} student{attStats.checkedOut !== 1 ? "s" : ""} checked out
+                    </Text>
+                  </View>
+                )}
               </SectionCard>
             )}
 
@@ -538,9 +547,9 @@ export default function HomeScreen() {
               onViewAll={() => setMessCardOpen(true)}
             >
               <View style={styles.statsRow}>
-                <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
+                <StatBox label="Total" value={attStats?.total ?? messStats?.totalStudents ?? 0} color={theme.text} theme={theme} />
                 <StatBox label="Given" value={messStats?.cardGivenCount ?? 0} color="#22c55e" theme={theme} />
-                <StatBox label="Pending" value={(attStats?.total ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
+                <StatBox label="Pending" value={(attStats?.total ?? messStats?.totalStudents ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
               </View>
               <Pressable
                 onPress={() => { Haptics.selectionAsync(); setMessCardOpen(true); }}

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, attendanceTable, usersTable, studentInventoryTable } from "@workspace/db";
+import { db, attendanceTable, usersTable, studentInventoryTable, checkinsTable } from "@workspace/db";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, requireVolunteer, generateId, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
@@ -141,15 +141,33 @@ router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
       ? (caller.hostelId ? [caller.hostelId] : [])
       : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
 
-  const records = scopedHostelIds
-    ? scopedHostelIds.length
-      ? await db.select().from(attendanceTable).where(and(eq(attendanceTable.date, date), inArray(attendanceTable.hostelId, scopedHostelIds)))
-      : []
-    : await db.select().from(attendanceTable).where(eq(attendanceTable.date, date));
+  if (scopedHostelIds && scopedHostelIds.length === 0) {
+    res.json({ date, total: 0, inCampus: 0, checkedOut: 0, pending: 0, entered: 0, notEntered: 0 });
+    return;
+  }
 
-  const entered = records.filter(r => r.status === "entered").length;
-  const total = records.length;
-  res.json({ date, total, entered, notEntered: total - entered });
+  // Count all students in scope (this is the real "total")
+  const students = await db.select({ id: usersTable.id }).from(usersTable).where(
+    scopedHostelIds
+      ? and(inArray(usersTable.hostelId, scopedHostelIds), eq(usersTable.role, "student"))
+      : eq(usersTable.role, "student")
+  );
+  const total = students.length;
+
+  // Use checkinsTable for accurate in-campus / checked-out counts
+  const todayCheckins = scopedHostelIds
+    ? await db.select({ id: checkinsTable.id, checkOutTime: checkinsTable.checkOutTime })
+        .from(checkinsTable)
+        .where(and(eq(checkinsTable.date, date), inArray(checkinsTable.hostelId, scopedHostelIds)))
+    : await db.select({ id: checkinsTable.id, checkOutTime: checkinsTable.checkOutTime })
+        .from(checkinsTable)
+        .where(eq(checkinsTable.date, date));
+
+  const inCampus = todayCheckins.filter(c => !c.checkOutTime).length;
+  const checkedOut = todayCheckins.filter(c => !!c.checkOutTime).length;
+  const pending = total - inCampus - checkedOut;
+
+  res.json({ date, total, inCampus, checkedOut, pending, entered: inCampus, notEntered: pending });
 });
 
 // GET /api/attendance/student/:studentId
