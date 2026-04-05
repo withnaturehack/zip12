@@ -4,11 +4,10 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 const API_BASE: string =
-  Platform.OS === "web"
-    ? "/api"
-    : process.env.EXPO_PUBLIC_API_URL ||
-      (Constants.expoConfig?.extra?.apiUrl as string) ||
-      "http://localhost:8080/api";
+  process.env.EXPO_PUBLIC_API_URL ||
+  (Platform.OS === "web" ? "/api" : null) ||
+  (Constants.expoConfig?.extra?.apiUrl as string) ||
+  "http://localhost:8080/api";
 
 export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin" | "pending";
 

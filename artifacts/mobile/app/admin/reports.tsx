@@ -16,11 +16,10 @@ import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
 const API_BASE: string =
-  Platform.OS === "web"
-    ? "/api"
-    : process.env.EXPO_PUBLIC_API_URL ||
-      (Constants.expoConfig?.extra?.apiUrl as string) ||
-      "http://localhost:8080/api";
+  process.env.EXPO_PUBLIC_API_URL ||
+  (Platform.OS === "web" ? "/api" : null) ||
+  (Constants.expoConfig?.extra?.apiUrl as string) ||
+  "http://localhost:8080/api";
 
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();

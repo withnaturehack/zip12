@@ -13,11 +13,10 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE: string =
-  Platform.OS === "web"
-    ? "/api"
-    : process.env.EXPO_PUBLIC_API_URL ||
-      (Constants.expoConfig?.extra?.apiUrl as string) ||
-      "http://localhost:8080/api";
+  process.env.EXPO_PUBLIC_API_URL ||
+  (Platform.OS === "web" ? "/api" : null) ||
+  (Constants.expoConfig?.extra?.apiUrl as string) ||
+  "http://localhost:8080/api";
 
 type ImportType = "students" | "mess" | "hostel-assignment";
 
