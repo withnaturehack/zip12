@@ -4,9 +4,9 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "pnpm exec expo start --lan --port 8081",
+    "dev": "pnpm exec expo start --lan --port 8099",
     "build": "node scripts/build.js",
-    "serve": "pnpm exec expo start --no-dev --minify --localhost --port 8081",
+    "serve": "pnpm exec expo start --no-dev --minify --localhost --port 8099",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

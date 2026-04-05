@@ -47,13 +47,13 @@ outputType = "console"
 name = "Mobile App"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/mobile && PORT=8099 pnpm run dev"
-waitForPort = 8099
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/mobile run dev"
+waitForPort = 8099
 
 [agent]
 stack = "PNPM_WORKSPACE"
@@ -72,3 +72,6 @@ packages = ["eas-cli"]
 [userenv.shared]
 JWT_SECRET = "f6abfd33b3d2b80c0f5f95a966c729a4a4475f307bd087b3a77911a4c4924327"
 SUPABASE_DATABASE_URL = "postgresql://postgres.fqiqyeollnnfqyqkecsd:Kartik%40152407@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?uselibpqcompat=true&sslmode=require"
+EXPO_PUBLIC_API_URL = "https://92d2eb64-a529-4508-a402-a9c2aabfb87e-00-jdf2b5bbne0h.spock.replit.dev/api"
+EXPO_PUBLIC_WEB_ORIGIN = "https://92d2eb64-a529-4508-a402-a9c2aabfb87e-00-jdf2b5bbne0h.spock.replit.dev"
+EXPO_PUBLIC_DOMAIN = "92d2eb64-a529-4508-a402-a9c2aabfb87e-00-jdf2b5bbne0h.spock.replit.dev"
