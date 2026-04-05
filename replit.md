@@ -149,13 +149,18 @@ workspace/
 9. **CSV Import** — SuperAdmin can bulk-import students, mess allocation, hostel assignments; download templates.
 10. **PDF Export** — Server-side pdfkit PDFs for students, attendance, activity logs, full report.
 
+## Deployed URLs
+
+- **API Server (Production):** `https://zip-12--vpahaddevbhoomi.replit.app/api`
+- **Health Check:** `https://zip-12--vpahaddevbhoomi.replit.app/health`
+
 ## Environment Variables
 
 - `SUPABASE_DATABASE_URL` — Supabase PostgreSQL connection (primary, transaction pooler port 6543)
 - `DATABASE_URL` — Replit PostgreSQL fallback
 - `JWT_SECRET` — JWT signing secret
 - `PORT` — API server port (set to 8080)
-- `EXPO_PUBLIC_API_URL` — API base URL (set in `artifacts/mobile/.env`)
+- `EXPO_PUBLIC_API_URL` — API base URL (set in `artifacts/mobile/.env`, currently points to deployed URL)
 
 ## Production Database (Supabase)
 
