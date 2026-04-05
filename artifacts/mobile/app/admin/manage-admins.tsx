@@ -159,7 +159,7 @@ export default function ManageAdminsScreen() {
           <Feather name="arrow-left" size={22} color={theme.text} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.text }]}>
-          Staff Management {staff ? `(${(staff as any[]).length})` : ""}
+          Manage Admins {staff ? `(${(staff as any[]).length})` : ""}
         </Text>
         <Pressable onPress={() => { resetCreateForm(); setShowCreateModal(true); }} style={[styles.addBtn, { backgroundColor: "#8B5CF6" }]}>
           <Feather name="user-plus" size={18} color="#fff" />

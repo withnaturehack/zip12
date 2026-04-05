@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Modal,
   TextInput, ActivityIndicator, Alert,
-  Platform, useColorScheme,
+  Platform, useColorScheme, Share, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,11 +14,109 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
-// ─── Hostel Detail Modal ───────────────────────────────────────────────────────
+// ─── Student Sub-Detail Modal ──────────────────────────────────────────────────
+function StudentSubModal({ student, visible, onClose, theme }: { student: any; visible: boolean; onClose: () => void; theme: any }) {
+  if (!student) return null;
+  const phone = student.mobileNumber || student.contactNumber || student.phone || "";
+  const emergency = student.emergencyContact || "";
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={ssd.overlay} onPress={onClose}>
+        <Pressable style={[ssd.sheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
+          <View style={ssd.handle} />
+          <View style={ssd.header}>
+            <View style={[ssd.avatar, { backgroundColor: theme.tint + "20" }]}>
+              <Text style={[ssd.avatarText, { color: theme.tint }]}>{(student.name || "?")[0].toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[ssd.name, { color: theme.text }]}>{student.name}</Text>
+              <Text style={[ssd.roll, { color: theme.textSecondary }]}>
+                {student.rollNumber || student.email || ""}
+              </Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={8} style={ssd.closeX}>
+              <Feather name="x" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </View>
 
+          {/* Chips */}
+          <View style={ssd.chips}>
+            {!!student.roomNumber && (
+              <View style={[ssd.chip, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
+                <Feather name="layers" size={11} color={theme.tint} />
+                <Text style={[ssd.chipText, { color: theme.tint }]}>Room {student.roomNumber}</Text>
+              </View>
+            )}
+            {!!(student.gender) && (
+              <View style={[ssd.chip, { backgroundColor: "#3b82f615", borderColor: "#3b82f640" }]}>
+                <Feather name="user" size={11} color="#3b82f6" />
+                <Text style={[ssd.chipText, { color: "#3b82f6" }]}>{student.gender}</Text>
+              </View>
+            )}
+            {!!(student.age) && (
+              <View style={[ssd.chip, { backgroundColor: "#8b5cf615", borderColor: "#8b5cf640" }]}>
+                <Text style={[ssd.chipText, { color: "#8b5cf6" }]}>Age {student.age}</Text>
+              </View>
+            )}
+            {!!(student.allottedMess || student.assignedMess) && (
+              <View style={[ssd.chip, { backgroundColor: "#f59e0b15", borderColor: "#f59e0b40" }]}>
+                <Feather name="coffee" size={11} color="#f59e0b" />
+                <Text style={[ssd.chipText, { color: "#f59e0b" }]}>{student.allottedMess || student.assignedMess}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Info */}
+          <View style={[ssd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            {!!phone && (
+              <View style={ssd.infoRow}>
+                <Feather name="phone" size={13} color="#3b82f6" />
+                <Text style={[ssd.infoLabel, { color: theme.textSecondary }]}>Mobile</Text>
+                <Text style={[ssd.infoVal, { color: theme.text }]}>{phone}</Text>
+              </View>
+            )}
+            {!!emergency && (
+              <View style={ssd.infoRow}>
+                <Feather name="alert-circle" size={13} color="#ef4444" />
+                <Text style={[ssd.infoLabel, { color: theme.textSecondary }]}>Emergency</Text>
+                <Text style={[ssd.infoVal, { color: theme.text }]}>{emergency}</Text>
+              </View>
+            )}
+            {!!(student.dsEs) && (
+              <View style={ssd.infoRow}>
+                <Feather name="book" size={13} color={theme.textTertiary} />
+                <Text style={[ssd.infoLabel, { color: theme.textSecondary }]}>DS/ES</Text>
+                <Text style={[ssd.infoVal, { color: theme.text }]}>{student.dsEs}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Call */}
+          {!!phone && (
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL(`tel:${phone}`); }}
+              style={ssd.callBtn}
+            >
+              <Feather name="phone-call" size={16} color="#fff" />
+              <Text style={ssd.callBtnText}>Call {phone}</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={onClose} style={[ssd.closeBtn, { borderColor: theme.border }]}>
+            <Text style={[ssd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Hostel Detail Modal ───────────────────────────────────────────────────────
 function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
   hostel: any; visible: boolean; onClose: () => void; theme: any; request: any;
 }) {
+  const [searchQ, setSearchQ] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+
   const loadAllHostelStudents = useCallback(async () => {
     if (!hostel?.id) return [];
     const pageSize = 500;
@@ -77,6 +175,57 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
   const occupiedRooms = new Set(studentList.filter((s: any) => s.roomNumber).map((s: any) => s.roomNumber)).size;
   const availableRooms = roomCount > 0 ? Math.max(0, roomCount - occupiedRooms) : null;
 
+  const filteredStudents = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    if (!q) return studentList;
+    return studentList.filter((s: any) =>
+      [s.name, s.rollNumber, s.roomNumber, s.email, s.gender, s.allottedMess].some(
+        v => v && String(v).toLowerCase().includes(q)
+      )
+    );
+  }, [studentList, searchQ]);
+
+  const handleDownloadReport = async () => {
+    Haptics.selectionAsync();
+    const headers = ["Name", "Roll Number", "Room", "Gender", "Age", "Mess", "Mobile", "Emergency"].join(",");
+    const rows = studentList.map((s: any) => [
+      `"${(s.name || "").replace(/"/g, '""')}"`,
+      s.rollNumber || "",
+      s.roomNumber || "",
+      s.gender || "",
+      s.age || "",
+      s.allottedMess || "",
+      s.mobileNumber || "",
+      s.emergencyContact || "",
+    ].join(","));
+    const csv = [headers, ...rows].join("\n");
+
+    if (Platform.OS === "web") {
+      try {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${hostel.name}_students.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        Alert.alert("Error", "Could not download report");
+      }
+    } else {
+      try {
+        await Share.share({
+          message: csv,
+          title: `${hostel.name} Student Report`,
+        });
+      } catch (err: any) {
+        if (err.message !== "The user did not share") {
+          Alert.alert("Error", "Could not share report");
+        }
+      }
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.detailModal, { backgroundColor: theme.background }]}>
@@ -86,6 +235,15 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
             <Text style={[styles.detailTitle, { color: theme.text }]}>{hostel.name}</Text>
             {hostel.location ? <Text style={[styles.detailSub, { color: theme.textSecondary }]}>{hostel.location}</Text> : null}
           </View>
+          {/* Download CSV button */}
+          {studentList.length > 0 && (
+            <Pressable
+              onPress={handleDownloadReport}
+              style={[styles.closeX, { backgroundColor: "#22c55e15", borderRadius: 8, borderWidth: 1, borderColor: "#22c55e40", marginRight: 8 }]}
+            >
+              <Feather name="download" size={17} color="#22c55e" />
+            </Pressable>
+          )}
           <Pressable onPress={onClose} style={styles.closeX}>
             <Feather name="x" size={22} color={theme.text} />
           </Pressable>
@@ -101,13 +259,22 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
               { icon: "user", label: "Warden", value: hostel.wardenName || "—", color: theme.tint },
               { icon: "phone", label: "Phone", value: hostel.wardenPhone || "—", color: "#22c55e" },
             ].map(item => (
-              <View key={item.label} style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Pressable
+                key={item.label}
+                onPress={() => {
+                  if (item.label === "Phone" && hostel.wardenPhone) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Linking.openURL(`tel:${hostel.wardenPhone}`);
+                  }
+                }}
+                style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              >
                 <View style={[styles.infoIcon, { backgroundColor: item.color + "20" }]}>
                   <Feather name={item.icon as any} size={16} color={item.color} />
                 </View>
                 <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{item.label}</Text>
                 <Text style={[styles.infoVal, { color: theme.text }]} numberOfLines={1}>{item.value}</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
 
@@ -132,17 +299,50 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
           </View>
 
           {/* Students List */}
-          <Text style={[styles.sectionLabel, { color: theme.text }]}>Students ({studentList.length})</Text>
+          <View style={styles.studentsSectionHeader}>
+            <Text style={[styles.sectionLabel, { color: theme.text }]}>
+              Students ({isLoading ? "…" : filteredStudents.length}{filteredStudents.length !== studentList.length ? `/${studentList.length}` : ""})
+            </Text>
+          </View>
+
+          {/* Search Bar */}
+          <View style={[styles.searchBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Feather name="search" size={14} color={theme.textTertiary} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder="Search by name, roll, room, gender…"
+              placeholderTextColor={theme.textTertiary}
+              value={searchQ}
+              onChangeText={setSearchQ}
+              autoCapitalize="none"
+            />
+            {searchQ.length > 0 && (
+              <Pressable onPress={() => setSearchQ("")} hitSlop={8}>
+                <Feather name="x" size={14} color={theme.textTertiary} />
+              </Pressable>
+            )}
+          </View>
+
           {isLoading ? (
             <><CardSkeleton /><CardSkeleton /></>
-          ) : studentList.length === 0 ? (
+          ) : filteredStudents.length === 0 ? (
             <View style={[styles.emptyBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Feather name="users" size={28} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No students assigned</Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                {searchQ ? "No students match your search" : "No students assigned"}
+              </Text>
             </View>
           ) : (
-            studentList.map((s: any) => (
-              <View key={s.id} style={[styles.studentRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            filteredStudents.map((s: any) => (
+              <Pressable
+                key={s.id}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedStudent(s); }}
+                style={({ pressed }) => [styles.studentRow, {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                  opacity: pressed ? 0.85 : 1,
+                }]}
+              >
                 <View style={[styles.studentAvatar, { backgroundColor: theme.tint + "20" }]}>
                   <Text style={[styles.studentAvatarText, { color: theme.tint }]}>{(s.name || "?")[0].toUpperCase()}</Text>
                 </View>
@@ -151,13 +351,24 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
                   <Text style={[styles.studentMeta, { color: theme.textSecondary }]}>
                     {s.rollNumber || s.email}{s.roomNumber ? ` · Room ${s.roomNumber}` : ""}
                   </Text>
+                  {!!(s.gender || s.allottedMess) && (
+                    <Text style={[styles.studentMeta, { color: theme.textTertiary }]}>
+                      {[s.gender, s.allottedMess].filter(Boolean).join(" · ")}
+                    </Text>
+                  )}
                 </View>
-                {s.roomNumber && (
-                  <View style={[styles.roomBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
-                    <Text style={[styles.roomBadgeText, { color: theme.tint }]}>{s.roomNumber}</Text>
-                  </View>
-                )}
-              </View>
+                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  {s.roomNumber && (
+                    <View style={[styles.roomBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
+                      <Text style={[styles.roomBadgeText, { color: theme.tint }]}>{s.roomNumber}</Text>
+                    </View>
+                  )}
+                  {!!(s.mobileNumber || s.phone) && (
+                    <Feather name="phone" size={12} color={theme.tint} />
+                  )}
+                  <Feather name="chevron-right" size={14} color={theme.textTertiary} />
+                </View>
+              </Pressable>
             ))
           )}
 
@@ -166,7 +377,11 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
             <>
               <Text style={[styles.sectionLabel, { color: theme.text, marginTop: 20 }]}>Contacts</Text>
               {(contacts as any[]).map((c: any) => (
-                <View key={c.id} style={[styles.studentRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Pressable
+                  key={c.id}
+                  onPress={() => { if (c.phone) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL(`tel:${c.phone}`); } }}
+                  style={({ pressed }) => [styles.studentRow, { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.85 : 1 }]}
+                >
                   <View style={[styles.studentAvatar, { backgroundColor: "#22c55e20" }]}>
                     <Feather name="phone-call" size={16} color="#22c55e" />
                   </View>
@@ -174,11 +389,20 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request }: {
                     <Text style={[styles.studentName, { color: theme.text }]}>{c.name}</Text>
                     <Text style={[styles.studentMeta, { color: theme.textSecondary }]}>{c.role} · {c.phone}</Text>
                   </View>
-                </View>
+                  {!!c.phone && <Feather name="phone" size={14} color="#22c55e" />}
+                </Pressable>
               ))}
             </>
           )}
         </ScrollView>
+
+        {/* Student Sub-Modal */}
+        <StudentSubModal
+          student={selectedStudent}
+          visible={!!selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+          theme={theme}
+        />
       </View>
     </Modal>
   );
@@ -529,4 +753,31 @@ const styles = StyleSheet.create({
   studentMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   roomBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
   roomBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  studentsSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+});
+
+// ─── StudentSubModal Styles ────────────────────────────────────────────────────
+const ssd = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 14 },
+  header: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
+  avatar: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  name: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  roll: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  closeX: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  infoCard: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
+  infoLabel: { fontSize: 12, fontFamily: "Inter_400Regular", width: 72 },
+  infoVal: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "right" },
+  callBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#22c55e", borderRadius: 14, paddingVertical: 13, marginBottom: 8 },
+  callBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+  closeBtn: { borderWidth: 1, borderRadius: 14, paddingVertical: 11, alignItems: "center" },
+  closeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

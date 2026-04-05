@@ -570,7 +570,7 @@ export default function HomeScreen() {
                 <QuickCard label="CSV Import" icon="upload-cloud" color="#f59e0b" onPress={() => router.push("/admin/csv-import")} />
                 <QuickCard label="Reports" icon="download" color="#ef4444" onPress={() => router.push("/admin/reports")} />
                 <QuickCard label="Master Table" icon="database" color="#6366f1" onPress={() => router.push("/admin/master-table")} />
-                <QuickCard label="Manage Users" icon="user-plus" color="#f59e0b" onPress={() => router.push("/admin/manage-admins")} />
+                <QuickCard label="Manage Admins" icon="user-plus" color="#8b5cf6" onPress={() => router.push("/admin/manage-admins")} />
               </>}
             </View>
           </>

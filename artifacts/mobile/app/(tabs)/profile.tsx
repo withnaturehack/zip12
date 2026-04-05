@@ -72,7 +72,7 @@ export default function ProfileScreen() {
       { icon: "upload-cloud", label: "CSV Import", path: "/admin/csv-import" },
       { icon: "database", label: "Master Table", path: "/admin/master-table" },
       { icon: "download", label: "Reports & PDF Export", path: "/admin/reports" },
-      { icon: "user-plus", label: "Manage Users", path: "/admin/manage-admins" },
+      { icon: "user-plus", label: "Manage Admins", path: "/admin/manage-admins" },
     ] : []),
   ];
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable, TextInput, ScrollView,
-  Platform, useColorScheme, useWindowDimensions,
+  Platform, useColorScheme, useWindowDimensions, Modal, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -12,7 +12,175 @@ import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 import { useDebounce } from "@/hooks/useDebounce";
+import * as Haptics from "expo-haptics";
 
+// ─── Student Detail Modal ──────────────────────────────────────────────────────
+function InventoryStudentModal({ student, visible, onClose, theme, isDark }: {
+  student: any; visible: boolean; onClose: () => void; theme: any; isDark: boolean;
+}) {
+  if (!student) return null;
+  const inv = student.inventory || {};
+  const STATUS_META = {
+    green: { label: "Submitted", color: "#22c55e" },
+    yellow: { label: "Check-in · Pending", color: "#eab308" },
+    red: { label: "Checked-out · Not Submitted", color: "#ef4444" },
+    black: { label: "Not Taken", color: "#64748b" },
+  } as const;
+  const status = statusOf(student);
+  const meta = STATUS_META[status];
+  const phone = student.mobileNumber || student.contactNumber || student.phone || "";
+  const emergency = student.emergencyContact || "";
+
+  const items = [
+    { key: "mattress", label: "Mattress" },
+    { key: "bedsheet", label: "Bedsheet" },
+    { key: "pillow", label: "Pillow" },
+  ] as const;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={imd.overlay} onPress={onClose}>
+        <Pressable style={[imd.sheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
+          <View style={imd.handle} />
+
+          {/* Header */}
+          <View style={imd.sheetHeader}>
+            <View style={[imd.avatar, { backgroundColor: theme.tint + "20" }]}>
+              <Text style={[imd.avatarText, { color: theme.tint }]}>
+                {(student.name || "?")[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[imd.name, { color: theme.text }]}>{student.name}</Text>
+              <Text style={[imd.meta, { color: theme.textSecondary }]}>
+                {student.rollNumber}{student.roomNumber ? ` · Room ${student.roomNumber}` : ""}
+              </Text>
+              {!!(student.hostelId || student.hostelName) && (
+                <Text style={[imd.meta, { color: theme.textTertiary }]}>
+                  {student.hostelName || student.hostelId}
+                </Text>
+              )}
+            </View>
+            <Pressable onPress={onClose} style={imd.closeX} hitSlop={8}>
+              <Feather name="x" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </View>
+
+          {/* Status Badge */}
+          <View style={[imd.statusBadge, { backgroundColor: meta.color + "15", borderColor: meta.color + "40" }]}>
+            <View style={[imd.statusDot, { backgroundColor: meta.color }]} />
+            <Text style={[imd.statusLabel, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+
+          {/* Inventory Items */}
+          <View style={imd.section}>
+            <Text style={[imd.sectionTitle, { color: theme.text }]}>Inventory</Text>
+            <View style={imd.itemRow}>
+              {items.map(({ key, label }) => {
+                const given = !!inv[key];
+                const submitted = !!inv[`${key}Submitted`];
+                const bg = submitted ? "#22c55e20" : given ? "#fef3c720" : theme.background;
+                const borderC = submitted ? "#22c55e50" : given ? "#eab30850" : theme.border;
+                const iconName = submitted ? "check-circle" : given ? "clock" : "minus-circle";
+                const iconColor = submitted ? "#22c55e" : given ? "#eab308" : theme.textTertiary;
+                const statusText = submitted ? "Submitted" : given ? "Pending" : "Not given";
+                return (
+                  <View key={key} style={[imd.inventoryItem, { backgroundColor: bg, borderColor: borderC }]}>
+                    <Feather name={iconName} size={18} color={iconColor} />
+                    <Text style={[imd.inventoryLabel, { color: theme.text }]}>{label}</Text>
+                    <Text style={[imd.inventoryStatus, { color: iconColor }]}>{statusText}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Check-in/out */}
+          {(student.checkInTime || student.checkOutTime) && (
+            <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              {!!student.checkInTime && (
+                <View style={imd.infoRow}>
+                  <Feather name="log-in" size={14} color="#22c55e" />
+                  <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>Check-in</Text>
+                  <Text style={[imd.infoVal, { color: theme.text }]}>
+                    {new Date(student.checkInTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                  </Text>
+                </View>
+              )}
+              {!!student.checkOutTime && (
+                <View style={imd.infoRow}>
+                  <Feather name="log-out" size={14} color="#ef4444" />
+                  <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>Check-out</Text>
+                  <Text style={[imd.infoVal, { color: theme.text }]}>
+                    {new Date(student.checkOutTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Student details */}
+          <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            {!!student.gender && <InfoRow icon="user" label="Gender" value={student.gender} theme={theme} />}
+            {!!student.age && <InfoRow icon="calendar" label="Age" value={String(student.age)} theme={theme} />}
+            {!!(student.allottedMess || student.assignedMess) && <InfoRow icon="coffee" label="Mess" value={student.allottedMess || student.assignedMess} theme={theme} />}
+            {!!phone && <InfoRow icon="phone" label="Mobile" value={phone} theme={theme} />}
+            {!!emergency && <InfoRow icon="alert-circle" label="Emergency" value={emergency} theme={theme} />}
+          </View>
+
+          {/* Call button */}
+          {!!phone && (
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL(`tel:${phone}`); }}
+              style={imd.callBtn}
+            >
+              <Feather name="phone-call" size={16} color="#fff" />
+              <Text style={imd.callBtnText}>Call {phone}</Text>
+            </Pressable>
+          )}
+
+          <Pressable onPress={onClose} style={[imd.closeBtn, { borderColor: theme.border }]}>
+            <Text style={[imd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function InfoRow({ icon, label, value, theme }: { icon: any; label: string; value: string; theme: any }) {
+  return (
+    <View style={imd.infoRow}>
+      <Feather name={icon} size={13} color={theme.textTertiary} />
+      <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>{label}</Text>
+      <Text style={[imd.infoVal, { color: theme.text }]} numberOfLines={2}>{value}</Text>
+    </View>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function hasAnyGiven(inv: any) { return !!(inv?.mattress || inv?.bedsheet || inv?.pillow); }
+function hasPendingGiven(inv: any) {
+  return !!(
+    (inv?.mattress && !inv?.mattressSubmitted) ||
+    (inv?.bedsheet && !inv?.bedsheetSubmitted) ||
+    (inv?.pillow && !inv?.pillowSubmitted)
+  );
+}
+function statusOf(student: any): "green" | "yellow" | "red" | "black" {
+  const inv = student?.inventory || {};
+  const isLocked = !!inv.inventoryLocked;
+  const anyGiven = hasAnyGiven(inv);
+  const pending = hasPendingGiven(inv);
+  const checkedIn = !!student?.checkInTime;
+  const checkedOut = !!student?.checkOutTime;
+  if (isLocked || (anyGiven && !pending)) return "green";
+  if (pending && checkedOut) return "red";
+  if (pending && checkedIn) return "yellow";
+  return "black";
+}
+
+// ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function InventoryTableScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -24,10 +192,12 @@ export default function InventoryTableScreen() {
   const topPad = (isWeb ? 67 : insets.top) + 8;
   const request = useApiRequest();
   const { isVolunteer, isSuperAdmin } = useAuth();
+
   const [filter, setFilter] = useState<"all" | "missing" | "submitted">("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [activating, setActivating] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
 
   const requiresShift = isVolunteer && !isSuperAdmin;
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
@@ -69,26 +239,6 @@ export default function InventoryTableScreen() {
     }
     return Array.from(map.values()) as any[];
   }, [data]);
-  const hasAnyGiven = (inv: any) => !!(inv?.mattress || inv?.bedsheet || inv?.pillow);
-  const hasPendingGiven = (inv: any) => !!(
-    (inv?.mattress && !inv?.mattressSubmitted) ||
-    (inv?.bedsheet && !inv?.bedsheetSubmitted) ||
-    (inv?.pillow && !inv?.pillowSubmitted)
-  );
-
-  const statusOf = (student: any): "green" | "yellow" | "red" | "black" => {
-    const inv = student?.inventory || {};
-    const isLocked = !!inv.inventoryLocked;
-    const anyGiven = hasAnyGiven(inv);
-    const pending = hasPendingGiven(inv);
-    const checkedIn = !!student?.checkInTime;
-    const checkedOut = !!student?.checkOutTime;
-
-    if (isLocked || (anyGiven && !pending)) return "green";
-    if (pending && checkedOut) return "red";
-    if (pending && checkedIn) return "yellow";
-    return "black";
-  };
 
   const submittedCount = items.filter(s => statusOf(s) === "green").length;
   const checkedInPendingCount = items.filter(s => statusOf(s) === "yellow").length;
@@ -101,9 +251,7 @@ export default function InventoryTableScreen() {
     return items.filter(s => {
       if (q) {
         const haystack = [s.name, s.rollNumber, s.roomNumber, s.hostelId, s.email]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+          .filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (filter === "submitted") return !!s.inventory?.inventoryLocked;
@@ -115,14 +263,11 @@ export default function InventoryTableScreen() {
   const sortedItems = useMemo(() => {
     const priority = { red: 0, yellow: 1, green: 2, black: 3 } as const;
     return [...filteredItems].sort((a, b) => {
-      const sa = statusOf(a);
-      const sb = statusOf(b);
+      const sa = statusOf(a), sb = statusOf(b);
       if (priority[sa] !== priority[sb]) return priority[sa] - priority[sb];
-
       const ta = new Date(a?.checkOutTime || a?.checkInTime || 0).getTime();
       const tb = new Date(b?.checkOutTime || b?.checkInTime || 0).getTime();
       if (ta !== tb) return tb - ta;
-
       return String(a?.name || "").localeCompare(String(b?.name || ""));
     });
   }, [filteredItems]);
@@ -135,9 +280,7 @@ export default function InventoryTableScreen() {
       await request("/staff/go-active", { method: "POST", body: JSON.stringify({}) });
       await refetchStatus();
     } catch {
-    } finally {
-      setActivating(false);
-    }
+    } finally { setActivating(false); }
   };
 
   return (
@@ -204,7 +347,7 @@ export default function InventoryTableScreen() {
       </View>
 
       {/* Filter tabs */}
-      <View style={[styles.filterRow, { borderBottomColor: theme.border }]}>
+      <View style={[styles.filterRow]}>
         {(["all", "missing", "submitted"] as const).map(f => (
           <Pressable
             key={f}
@@ -230,7 +373,9 @@ export default function InventoryTableScreen() {
       </View>
 
       <View style={styles.resultsRow}>
-        <Text style={[styles.resultsText, { color: theme.textSecondary }]}>Showing {sortedItems.length} of {items.length}</Text>
+        <Text style={[styles.resultsText, { color: theme.textSecondary }]}>
+          Showing {sortedItems.length} of {items.length}
+        </Text>
       </View>
 
       {/* Table header */}
@@ -251,12 +396,8 @@ export default function InventoryTableScreen() {
           data={sortedItems}
           keyExtractor={(i, idx) => {
             const roll = String(i?.rollNumber || "").trim().toLowerCase();
-            const email = String(i?.email || "").trim().toLowerCase();
-            const hostel = String(i?.hostelId || "").trim().toLowerCase();
-            const room = String(i?.roomNumber || "").trim().toLowerCase();
-            const name = String(i?.name || "").trim().toLowerCase();
             const id = String(i?.id || "").trim();
-            return id || roll || email || `${name}|${room}|${hostel}|${idx}`;
+            return id || roll || `${idx}`;
           }}
           contentContainerStyle={{ paddingBottom: 100 }}
           removeClippedSubviews
@@ -278,27 +419,27 @@ export default function InventoryTableScreen() {
             const anyGiven = hasAnyGiven(inv);
             const rowStatus = statusOf(item);
             const isLocked = rowStatus === "green";
-            const borderLeftColor = rowStatus === "green"
-              ? "#22c55e"
-              : rowStatus === "yellow"
-                ? "#eab308"
-                : rowStatus === "red"
-                  ? "#ef4444"
-                  : "#64748b";
+            const borderLeftColor = rowStatus === "green" ? "#22c55e" : rowStatus === "yellow" ? "#eab308" : rowStatus === "red" ? "#ef4444" : "#64748b";
 
             return (
-              <View style={[styles.tableRow, {
-                backgroundColor: isLocked ? "#22c55e05" : theme.background,
-                borderColor: theme.border,
-                borderLeftWidth: 3,
-                borderLeftColor,
-              }]}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedStudent(item);
+                }}
+                style={({ pressed }) => [styles.tableRow, {
+                  backgroundColor: isLocked ? "#22c55e06" : theme.background,
+                  borderColor: theme.border,
+                  borderLeftWidth: 3,
+                  borderLeftColor,
+                  opacity: pressed ? 0.85 : 1,
+                }]}
+              >
                 <View style={styles.nameCol}>
                   <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
                   <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
                     {item.rollNumber || ""} {item.roomNumber ? `· ${item.roomNumber}` : ""}
                   </Text>
-                  {/* Missing items warning */}
                   {!isLocked && pendingSubmitItems.length > 0 && (
                     <Text style={[styles.missingText, { color: "#ef4444" }]}>
                       Not submitted: {pendingSubmitItems.join(", ")}
@@ -309,7 +450,6 @@ export default function InventoryTableScreen() {
                   )}
                 </View>
 
-                {/* Status badge */}
                 <View style={styles.statusCol}>
                   {rowStatus === "green" ? (
                     <View style={styles.submittedBadge}>
@@ -317,60 +457,68 @@ export default function InventoryTableScreen() {
                       <Text style={styles.submittedText}>Done</Text>
                     </View>
                   ) : rowStatus === "red" ? (
-                    <View style={[styles.statusPill, { backgroundColor: "#fee2e2" }]}>
-                      <Text style={[styles.statusPillText, { color: "#b91c1c" }]}>Out + Pending</Text>
+                    <View style={[styles.statusPill, { backgroundColor: "#fecaca" }]}>
+                      <Text style={[styles.statusPillText, { color: "#b91c1c" }]}>Out+Pend</Text>
                     </View>
                   ) : rowStatus === "yellow" ? (
-                    <View style={[styles.statusPill, { backgroundColor: "#fef3c7" }]}>
-                      <Text style={[styles.statusPillText, { color: "#a16207" }]}>In + Pending</Text>
+                    <View style={[styles.statusPill, { backgroundColor: "#fef9c3" }]}>
+                      <Text style={[styles.statusPillText, { color: "#a16207" }]}>In+Pend</Text>
                     </View>
                   ) : (
-                    <View style={[styles.statusPill, { backgroundColor: "#334155" }]}>
-                      <Text style={[styles.statusPillText, { color: "#e2e8f0" }]}>Not Taken</Text>
+                    <View style={[styles.statusPill, { backgroundColor: isDark ? "#1e293b" : "#f1f5f9" }]}>
+                      <Text style={[styles.statusPillText, { color: isDark ? "#94a3b8" : "#475569" }]}>Not Taken</Text>
                     </View>
                   )}
                 </View>
 
-                {/* Read-only item states */}
                 <View style={styles.toggleRow}>
                   {(["mattress", "bedsheet", "pillow"] as const).map(field => {
                     const val = !!inv[field];
                     const submitted = !!inv[`${field}Submitted`];
-                    const toggleBorderColor = submitted ? "#22c55e" : val ? "#f59e0b" : "#475569";
-                    const toggleBgColor = submitted ? "#22c55e20" : val ? "#fef3c7" : "#334155";
-                    const toggleIconColor = submitted ? "#22c55e" : val ? "#a16207" : "#e2e8f0";
+                    const bg = submitted ? "#22c55e20" : val ? "#fef3c7" : (isDark ? "#1e293b" : "#f1f5f9");
+                    const border = submitted ? "#22c55e" : val ? "#f59e0b" : (isDark ? "#334155" : "#cbd5e1");
+                    const icon = submitted ? "check-circle" : val ? "clock" : "minus";
+                    const color = submitted ? "#22c55e" : val ? "#a16207" : (isDark ? "#475569" : "#94a3b8");
                     return (
-                      <View
-                        key={field}
-                        style={[
-                          styles.toggleBtn,
-                          { backgroundColor: toggleBgColor, borderColor: toggleBorderColor },
-                        ]}
-                      >
-                        <Feather name={submitted ? "check-circle" : val ? "clock" : "minus"} size={14} color={toggleIconColor} />
+                      <View key={field} style={[styles.toggleBtn, { backgroundColor: bg, borderColor: border }]}>
+                        <Feather name={icon} size={14} color={color} />
                       </View>
                     );
                   })}
                 </View>
-              </View>
+              </Pressable>
             );
           }}
         />
       )}
 
+      {/* Student Detail Modal */}
+      <InventoryStudentModal
+        student={selectedStudent}
+        visible={!!selectedStudent}
+        onClose={() => setSelectedStudent(null)}
+        theme={theme}
+        isDark={isDark}
+      />
+
       {!canWork && (
         <View style={styles.lockOverlay}>
           <BlurView intensity={70} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
           <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Feather name="lock" size={20} color={theme.textSecondary} />
-            <Text style={[styles.lockTitle, { color: theme.text }]}>Shift inactive</Text>
-            <Text style={[styles.lockSub, { color: theme.textSecondary }]}>Start shift to access attendance, inventory and student data.</Text>
+            <View style={[{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.tint + "15", alignItems: "center", justifyContent: "center" }]}>
+              <Feather name="lock" size={20} color={theme.tint} />
+            </View>
+            <Text style={[styles.lockTitle, { color: theme.text }]}>Shift Inactive</Text>
+            <Text style={[styles.lockSub, { color: theme.textSecondary }]}>
+              Start your shift to access inventory and student data.
+            </Text>
             <Pressable
               onPress={goActive}
               disabled={activating}
-              style={[styles.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1 }]}
+              style={[styles.lockBtn, { backgroundColor: theme.tint, opacity: activating ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 8 }]}
             >
-              <Text style={styles.lockBtnText}>{activating ? "Starting..." : "Go Active"}</Text>
+              <Feather name="play-circle" size={16} color="#fff" />
+              <Text style={styles.lockBtnText}>{activating ? "Starting..." : "Start Shift"}</Text>
             </Pressable>
           </View>
         </View>
@@ -420,14 +568,14 @@ const styles = StyleSheet.create({
   searchRow: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 5 },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
-  filterRow: { flexDirection: "row", paddingHorizontal: 14, paddingVertical: 7, gap: 8, borderBottomWidth: 0 },
+  filterRow: { flexDirection: "row", paddingHorizontal: 14, paddingVertical: 7, gap: 8 },
   filterBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   filterBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   resultsRow: { paddingHorizontal: 14, paddingBottom: 6 },
   resultsText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   tableHead: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
   thName: { flex: 1, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
-  thStatus: { width: 58, textAlign: "center", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
+  thStatus: { width: 62, textAlign: "center", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   thItems: { flexDirection: "row", gap: 6 },
   thItem: { width: 36, textAlign: "center", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   tableRow: { flexDirection: "row", alignItems: "center", marginHorizontal: 12, marginTop: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, paddingLeft: 10 },
@@ -435,19 +583,49 @@ const styles = StyleSheet.create({
   studentName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   studentMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
   missingText: { fontSize: 10, fontFamily: "Inter_600SemiBold", marginTop: 2 },
-  statusCol: { width: 58, alignItems: "center" },
+  statusCol: { width: 62, alignItems: "center" },
   submittedBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#dcfce7", paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 },
   submittedText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#16a34a" },
-  statusPill: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 6 },
-  statusPillText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  statusPill: { paddingHorizontal: 5, paddingVertical: 4, borderRadius: 6, alignItems: "center" },
+  statusPillText: { fontSize: 9, fontFamily: "Inter_700Bold" },
   toggleRow: { flexDirection: "row", gap: 6 },
   toggleBtn: { width: 36, height: 32, borderRadius: 8, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingTop: 80, gap: 12 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 20 },
-  lockCard: { borderWidth: 1, borderRadius: 14, padding: 16, alignItems: "center", gap: 8, width: "100%", maxWidth: 340 },
-  lockTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  lockSub: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
-  lockBtn: { marginTop: 4, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  lockBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
+  lockCard: { borderWidth: 1, borderRadius: 16, padding: 20, alignItems: "center", gap: 10, width: "100%", maxWidth: 340 },
+  lockTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  lockSub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  lockBtn: { marginTop: 4, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  lockBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+});
+
+// ─── InventoryStudentModal Styles ─────────────────────────────────────────────
+const imd = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 14 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  name: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  meta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  closeX: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, alignSelf: "flex-start", marginBottom: 14 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusLabel: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  section: { marginBottom: 14 },
+  sectionTitle: { fontSize: 14, fontFamily: "Inter_700Bold", marginBottom: 8 },
+  itemRow: { flexDirection: "row", gap: 8 },
+  inventoryItem: { flex: 1, borderRadius: 10, borderWidth: 1, padding: 10, alignItems: "center", gap: 4 },
+  inventoryLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  inventoryStatus: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  infoCard: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
+  infoLabel: { fontSize: 12, fontFamily: "Inter_400Regular", width: 72 },
+  infoVal: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "right" },
+  callBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#22c55e", borderRadius: 14, paddingVertical: 13, marginBottom: 8 },
+  callBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+  closeBtn: { borderWidth: 1, borderRadius: 14, paddingVertical: 11, alignItems: "center" },
+  closeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });
