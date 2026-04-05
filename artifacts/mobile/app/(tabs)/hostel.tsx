@@ -4,6 +4,7 @@ import {
   Modal, ScrollView, RefreshControl, Platform, useColorScheme,
   ActivityIndicator,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
