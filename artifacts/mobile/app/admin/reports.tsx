@@ -15,11 +15,11 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
+const PROD_API = "https://zip-12--vpahaddevbhoomi.replit.app/api";
 const API_BASE: string =
   process.env.EXPO_PUBLIC_API_URL ||
-  (Platform.OS === "web" ? "/api" : null) ||
   (Constants.expoConfig?.extra?.apiUrl as string) ||
-  "http://localhost:8080/api";
+  PROD_API;
 
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();

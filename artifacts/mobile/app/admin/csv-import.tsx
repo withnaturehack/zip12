@@ -12,11 +12,11 @@ import Constants from "expo-constants";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 
+const PROD_API = "https://zip-12--vpahaddevbhoomi.replit.app/api";
 const API_BASE: string =
   process.env.EXPO_PUBLIC_API_URL ||
-  (Platform.OS === "web" ? "/api" : null) ||
   (Constants.expoConfig?.extra?.apiUrl as string) ||
-  "http://localhost:8080/api";
+  PROD_API;
 
 type ImportType = "students" | "mess" | "hostel-assignment";
 

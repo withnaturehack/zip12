@@ -3,11 +3,11 @@ import React, { createContext, useContext, useEffect, useState, useCallback, Rea
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
+const PROD_API = "https://zip-12--vpahaddevbhoomi.replit.app/api";
 const API_BASE: string =
   process.env.EXPO_PUBLIC_API_URL ||
-  (Platform.OS === "web" ? "/api" : null) ||
   (Constants.expoConfig?.extra?.apiUrl as string) ||
-  "http://localhost:8080/api";
+  PROD_API;
 
 export type UserRole = "student" | "volunteer" | "coordinator" | "admin" | "superadmin" | "pending";
 
