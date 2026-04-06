@@ -180,7 +180,7 @@ function StaffAnnouncements({ theme, user }: { theme: any; user: any }) {
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={{ paddingBottom: 120 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       showsVerticalScrollIndicator={false}
     >

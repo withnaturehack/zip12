@@ -144,6 +144,11 @@ function AssignStaffModal({ hostel, visible, onClose, theme, request, queryClien
   const assignStaff = async (staffMember: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setAssigning(staffMember.id);
+    queryClient.setQueryData(["hostel-staff", hostel?.id], (old: any[]) => {
+      const prev = Array.isArray(old) ? old : [];
+      if (prev.find((s: any) => s.id === staffMember.id)) return prev;
+      return [...prev, { ...staffMember, hostelId: hostel.id, hostelName: hostel.name }];
+    });
     try {
       await request(`/admin/assign-hostel/${staffMember.id}`, {
         method: "PATCH",
@@ -153,6 +158,7 @@ function AssignStaffModal({ hostel, visible, onClose, theme, request, queryClien
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       queryClient.invalidateQueries({ queryKey: ["hostel-staff", hostel?.id] });
     } catch (e: any) {
+      queryClient.invalidateQueries({ queryKey: ["hostel-staff", hostel?.id] });
       Alert.alert("Error", e.message || "Failed to assign staff");
     }
     setAssigning(null);
@@ -161,7 +167,7 @@ function AssignStaffModal({ hostel, visible, onClose, theme, request, queryClien
   if (!hostel) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === "ios" ? "formSheet" : "overFullScreen"} onRequestClose={onClose}>
       <View style={[styles.modal, { backgroundColor: theme.background }]}>
         <View style={[styles.modalHeader, { borderColor: theme.border }]}>
           <Text style={[styles.modalTitle, { color: theme.text }]}>Assign Staff to {hostel.name}</Text>
@@ -293,6 +299,9 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
         style: "destructive",
         onPress: async () => {
           try {
+            queryClient.setQueryData(["hostel-staff", hostel?.id], (old: any[]) =>
+              Array.isArray(old) ? old.filter((s: any) => s.id !== staffId) : old
+            );
             await request(`/admin/assign-hostel/${staffId}`, {
               method: "PATCH",
               body: JSON.stringify({ hostelId: null }),
@@ -301,6 +310,7 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
             queryClient.invalidateQueries({ queryKey: ["admin-users"] });
             queryClient.invalidateQueries({ queryKey: ["hostel-staff", hostel?.id] });
           } catch (e: any) {
+            queryClient.invalidateQueries({ queryKey: ["hostel-staff", hostel?.id] });
             Alert.alert("Error", e.message || "Failed to remove assignment");
           }
         },
@@ -308,24 +318,25 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
     ]);
   };
 
-  if (!hostel) return null;
-
+  // ── All derived values & hooks MUST be before any early return ────────────────
   const studentList = Array.isArray(students) ? students : [];
-  const roomCount = hostel.totalRooms || 0;
+  const roomCount = hostel?.totalRooms || 0;
   const occupiedRooms = new Set(studentList.filter((s: any) => s.roomNumber).map((s: any) => s.roomNumber)).size;
   const availableRooms = roomCount > 0 ? Math.max(0, roomCount - occupiedRooms) : null;
 
   const filteredStudents = useMemo(() => {
+    if (!hostel) return [];
     const q = searchQ.trim().toLowerCase();
-    const base = studentList.filter((s: any) =>
+    return studentList.filter((s: any) =>
       !q || [s.name, s.rollNumber, s.roomNumber, s.email, s.gender, s.allottedMess].some(
         v => v && String(v).toLowerCase().includes(q)
       )
     );
-    return base;
-  }, [studentList, searchQ]);
+  }, [studentList, searchQ, hostel]);
 
   const displayedStudents = showAll ? filteredStudents : filteredStudents.slice(0, 60);
+
+  if (!hostel) return null;
 
   const handleDownloadReport = async () => {
     Haptics.selectionAsync();
@@ -364,7 +375,7 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === "ios" ? "pageSheet" : "overFullScreen"} onRequestClose={onClose}>
       <View style={[styles.detailModal, { backgroundColor: theme.background }]}>
         {/* Header */}
         <View style={[styles.detailHeader, { borderBottomColor: theme.border }]}>
@@ -831,7 +842,7 @@ export default function HostelsAdminScreen() {
       />
 
       {/* Add Hostel Modal */}
-      <Modal visible={showHostel} animationType="slide" presentationStyle="formSheet">
+      <Modal visible={showHostel} animationType="slide" presentationStyle={Platform.OS === "ios" ? "formSheet" : "overFullScreen"}>
         <View style={[styles.modal, { backgroundColor: theme.background }]}>
           <View style={[styles.modalHeader, { borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Add Hostel</Text>
@@ -865,7 +876,7 @@ export default function HostelsAdminScreen() {
       </Modal>
 
       {/* Add Contact Modal */}
-      <Modal visible={showContact} animationType="slide" presentationStyle="formSheet">
+      <Modal visible={showContact} animationType="slide" presentationStyle={Platform.OS === "ios" ? "formSheet" : "overFullScreen"}>
         <View style={[styles.modal, { backgroundColor: theme.background }]}>
           <View style={[styles.modalHeader, { borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Add Emergency Contact</Text>

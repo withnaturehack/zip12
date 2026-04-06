@@ -23,6 +23,7 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: theme.tint,
         tabBarInactiveTintColor: theme.tabIconDefault,
+        tabBarHideOnKeyboard: false,
         tabBarStyle: {
           position: "absolute",
           backgroundColor: isIOS ? "transparent" : theme.navBg,

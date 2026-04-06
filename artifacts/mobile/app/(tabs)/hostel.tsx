@@ -65,7 +65,7 @@ const StudentDetailModal = memo(function StudentDetailModal({
   const initial = (student.name || "?")[0].toUpperCase();
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === "ios" ? "pageSheet" : "overFullScreen"} onRequestClose={onClose}>
       <View style={[sd.container, { backgroundColor: theme.background }]}>
         {/* Profile header */}
         <View style={[sd.profileHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>

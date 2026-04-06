@@ -207,8 +207,8 @@ export default function HomeScreen() {
     queryKey: ["inv-stats"],
     queryFn: () => request("/inventory-simple"),
     enabled: isCoordinator,
-    refetchInterval: 4000,
-    staleTime: 2000,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
   const invStatsArr = Array.isArray(invStats) ? invStats as any[] : [];
   const invScopedArr = React.useMemo(() => {
