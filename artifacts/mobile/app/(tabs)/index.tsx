@@ -13,7 +13,6 @@ import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { Badge } from "@/components/ui/Badge";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
-import { MessCardModal } from "@/components/MessCardModal";
 
 function StatBox({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
   return (
@@ -86,7 +85,6 @@ export default function HomeScreen() {
   const topPad = (isWeb ? 67 : insets.top) + 12;
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [messCardOpen, setMessCardOpen] = useState(false);
 
   const isAdmin = user?.role === "admin" || user?.role === "coordinator";
   const assignedHostelIds: string[] = React.useMemo(() => {
@@ -397,7 +395,7 @@ export default function HomeScreen() {
                 <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
               </View>
               <Pressable
-                onPress={() => { Haptics.selectionAsync(); setMessCardOpen(true); }}
+                onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/mess-card" as any); }}
                 style={[styles.actionBtn, { backgroundColor: "#f59e0b" }]}
               >
                 <Feather name="credit-card" size={15} color="#fff" />
@@ -413,7 +411,7 @@ export default function HomeScreen() {
               <QuickCard label="Search" icon="search" color={theme.tint} onPress={() => router.push("/admin/search")} />
               <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => router.push("/(tabs)/lostandfound")} />
               <QuickCard label="Inventory" icon="package" color="#f59e0b" onPress={() => router.push("/admin/inventory-table")} />
-              <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => setMessCardOpen(true)} />
+              <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/mess-card' as any); }} />
             </View>
           </>
         )}
@@ -543,7 +541,7 @@ export default function HomeScreen() {
               iconColor="#22c55e"
               title="Mess Cards"
               sub="Live · Today"
-              onViewAll={() => setMessCardOpen(true)}
+              onViewAll={() => router.push('/(tabs)/mess-card' as any)}
             >
               <View style={styles.statsRow}>
                 <StatBox label="Total" value={attStats?.total ?? messStats?.totalStudents ?? 0} color={theme.text} theme={theme} />
@@ -551,7 +549,7 @@ export default function HomeScreen() {
                 <StatBox label="Pending" value={(attStats?.total ?? messStats?.totalStudents ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
               </View>
               <Pressable
-                onPress={() => { Haptics.selectionAsync(); setMessCardOpen(true); }}
+                onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/mess-card" as any); }}
                 style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
               >
                 <Feather name="credit-card" size={15} color="#fff" />
@@ -566,7 +564,7 @@ export default function HomeScreen() {
             <View style={styles.quickGrid}>
               <QuickCard label="Students" icon="users" color={theme.tint} onPress={() => router.push("/(tabs)/hostel")} />
               <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => router.push("/(tabs)/lostandfound")} />
-              <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => setMessCardOpen(true)} />
+              <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/mess-card' as any); }} />
               <QuickCard label="Inventory" icon="package" color="#06b6d4" onPress={() => router.push("/admin/inventory-table")} />
               <QuickCard label="Search" icon="search" color="#3b82f6" onPress={() => router.push("/admin/search")} />
               <QuickCard label="Staff" icon="activity" color="#8b5cf6" onPress={() => router.push("/admin/staff-status")} />
@@ -640,7 +638,6 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <MessCardModal visible={messCardOpen} onClose={() => setMessCardOpen(false)} />
     </>
   );
 }

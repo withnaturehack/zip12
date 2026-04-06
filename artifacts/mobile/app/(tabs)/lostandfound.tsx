@@ -203,10 +203,13 @@ function AttendanceModal({
     const submitted = !!inv[submitKey];
 
     if (!given) {
-      return { label: "Not Taken", color: "#111827", bg: "#11182720", border: "#11182740" };
+      return { label: "Not Taken", color: "#64748b", bg: "#64748b15", border: "#64748b30" };
     }
     if (submitted) {
       return { label: "Submitted", color: "#22c55e", bg: "#22c55e20", border: "#22c55e40" };
+    }
+    if (isCheckedOut) {
+      return { label: "Missing", color: "#ef4444", bg: "#ef444420", border: "#ef444440" };
     }
     return { label: "Pending", color: "#eab308", bg: "#eab30820", border: "#eab30840" };
   };
@@ -379,9 +382,15 @@ function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: 
   const hasCheckedIn = !!item.checkInTime;
   const hasCheckedOut = !!item.checkOutTime;
   const isCurrentlyIn = hasCheckedIn && !hasCheckedOut;
+  const inv = item.inventory || {};
+  const hasMissingInventory = hasCheckedOut && (
+    (inv.mattress && !inv.mattressSubmitted) ||
+    (inv.bedsheet && !inv.bedsheetSubmitted) ||
+    (inv.pillow && !inv.pillowSubmitted)
+  );
 
-  const attColor = isCurrentlyIn ? "#22c55e" : hasCheckedOut ? "#6366f1" : "#f59e0b";
-  const statusLabel = isCurrentlyIn ? "In Campus" : hasCheckedOut ? "Checked Out" : "Pending";
+  const attColor = hasMissingInventory ? "#ef4444" : isCurrentlyIn ? "#22c55e" : hasCheckedOut ? "#6366f1" : "#f59e0b";
+  const statusLabel = hasMissingInventory ? "Inv. Missing" : isCurrentlyIn ? "In Campus" : hasCheckedOut ? "Checked Out" : "Pending";
 
   const checkInLabel = hasCheckedIn ? `In ${formatListTime(item.checkInTime)}` : "";
   const checkOutLabel = hasCheckedOut ? `Out ${formatListTime(item.checkOutTime)}` : "";

@@ -20,17 +20,22 @@ function InventoryStudentModal({ student, visible, onClose, theme, isDark }: {
 }) {
   if (!student) return null;
   const inv = student.inventory || {};
+  const isLocked = !!inv.inventoryLocked;
+  const rawStatus = statusOf(student);
   const STATUS_META = {
     green: { label: "Submitted", color: "#22c55e" },
     yellow: { label: "Pending", color: "#eab308" },
     black: { label: "Not Taken", color: "#64748b" },
+    red: { label: "Missing — Not Submitted", color: "#ef4444" },
   } as const;
-  const status = statusOf(student);
-  const meta = STATUS_META[status];
+  const meta = STATUS_META[rawStatus];
   const phone = student.mobileNumber || student.contactNumber || student.phone || "";
+  const email = student.email || "";
   const emergency = student.emergencyContact || "";
+  const hostelName = student.hostelName || student.hostelId || "";
+  const roomNumber = student.roomNumber || "";
 
-  const items = [
+  const inventoryItems = [
     { key: "mattress", label: "Mattress" },
     { key: "bedsheet", label: "Bedsheet" },
     { key: "pillow", label: "Pillow" },
@@ -41,106 +46,122 @@ function InventoryStudentModal({ student, visible, onClose, theme, isDark }: {
       <Pressable style={imd.overlay} onPress={onClose}>
         <Pressable style={[imd.sheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
           <View style={imd.handle} />
-
-          {/* Header */}
-          <View style={imd.sheetHeader}>
-            <View style={[imd.avatar, { backgroundColor: theme.tint + "20" }]}>
-              <Text style={[imd.avatarText, { color: theme.tint }]}>
-                {(student.name || "?")[0].toUpperCase()}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[imd.name, { color: theme.text }]}>{student.name}</Text>
-              <Text style={[imd.meta, { color: theme.textSecondary }]}>
-                {student.rollNumber}{student.roomNumber ? ` · Room ${student.roomNumber}` : ""}
-              </Text>
-              {!!(student.hostelId || student.hostelName) && (
-                <Text style={[imd.meta, { color: theme.textTertiary }]}>
-                  {student.hostelName || student.hostelId}
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+            {/* Header */}
+            <View style={imd.sheetHeader}>
+              <View style={[imd.avatar, { backgroundColor: theme.tint + "20" }]}>
+                <Text style={[imd.avatarText, { color: theme.tint }]}>
+                  {(student.name || "?")[0].toUpperCase()}
                 </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[imd.name, { color: theme.text }]}>{student.name}</Text>
+                <Text style={[imd.meta, { color: theme.textSecondary }]}>
+                  {student.rollNumber || student.email}
+                </Text>
+              </View>
+              <Pressable onPress={onClose} style={imd.closeX} hitSlop={8}>
+                <Feather name="x" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            {/* Hostel + Room highlighted chips */}
+            <View style={imd.locationChips}>
+              {!!hostelName && (
+                <View style={[imd.hostelChip, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
+                  <Feather name="home" size={13} color={theme.tint} />
+                  <Text style={[imd.hostelChipText, { color: theme.tint }]}>{hostelName}</Text>
+                </View>
+              )}
+              {!!roomNumber && (
+                <View style={[imd.hostelChip, { backgroundColor: "#8b5cf615", borderColor: "#8b5cf640" }]}>
+                  <Feather name="layers" size={13} color="#8b5cf6" />
+                  <Text style={[imd.hostelChipText, { color: "#8b5cf6" }]}>Room {roomNumber}</Text>
+                </View>
               )}
             </View>
-            <Pressable onPress={onClose} style={imd.closeX} hitSlop={8}>
-              <Feather name="x" size={20} color={theme.textSecondary} />
-            </Pressable>
-          </View>
 
-          {/* Status Badge */}
-          <View style={[imd.statusBadge, { backgroundColor: meta.color + "15", borderColor: meta.color + "40" }]}>
-            <View style={[imd.statusDot, { backgroundColor: meta.color }]} />
-            <Text style={[imd.statusLabel, { color: meta.color }]}>{meta.label}</Text>
-          </View>
+            {/* Status Badge */}
+            <View style={[imd.statusBadge, { backgroundColor: meta.color + "15", borderColor: meta.color + "40" }]}>
+              <View style={[imd.statusDot, { backgroundColor: meta.color }]} />
+              <Text style={[imd.statusLabel, { color: meta.color }]}>{meta.label}</Text>
+              {rawStatus === "red" && (
+                <Feather name="alert-triangle" size={12} color={meta.color} style={{ marginLeft: 4 }} />
+              )}
+            </View>
 
-          {/* Inventory Items */}
-          <View style={imd.section}>
-            <Text style={[imd.sectionTitle, { color: theme.text }]}>Inventory</Text>
-            <View style={imd.itemRow}>
-              {items.map(({ key, label }) => {
-                const given = !!inv[key];
-                const submitted = !!inv[`${key}Submitted`];
-                const bg = submitted ? "#22c55e20" : given ? "#fef3c720" : theme.background;
-                const borderC = submitted ? "#22c55e50" : given ? "#eab30850" : theme.border;
-                const iconName = submitted ? "check-circle" : given ? "clock" : "minus-circle";
-                const iconColor = submitted ? "#22c55e" : given ? "#eab308" : theme.textTertiary;
-                const statusText = submitted ? "Submitted" : given ? "Pending" : "Not given";
-                return (
-                  <View key={key} style={[imd.inventoryItem, { backgroundColor: bg, borderColor: borderC }]}>
-                    <Feather name={iconName} size={18} color={iconColor} />
-                    <Text style={[imd.inventoryLabel, { color: theme.text }]}>{label}</Text>
-                    <Text style={[imd.inventoryStatus, { color: iconColor }]}>{statusText}</Text>
+            {/* Inventory Items */}
+            <View style={imd.section}>
+              <Text style={[imd.sectionTitle, { color: theme.text }]}>Inventory</Text>
+              <View style={imd.itemRow}>
+                {inventoryItems.map(({ key, label }) => {
+                  const given = !!inv[key];
+                  const submitted = !!inv[`${key}Submitted`] || (isLocked && given);
+                  const isMissing = rawStatus === "red" && given && !submitted;
+                  const bg = submitted ? "#22c55e20" : isMissing ? "#fef2f220" : given ? "#fef3c720" : theme.background;
+                  const borderC = submitted ? "#22c55e50" : isMissing ? "#ef444450" : given ? "#eab30850" : theme.border;
+                  const iconName = submitted ? "check-circle" : isMissing ? "alert-circle" : given ? "clock" : "minus-circle";
+                  const iconColor = submitted ? "#22c55e" : isMissing ? "#ef4444" : given ? "#eab308" : theme.textTertiary;
+                  const statusText = submitted ? "Submitted" : isMissing ? "Missing" : given ? "Pending" : "Not given";
+                  return (
+                    <View key={key} style={[imd.inventoryItem, { backgroundColor: bg, borderColor: borderC }]}>
+                      <Feather name={iconName} size={18} color={iconColor} />
+                      <Text style={[imd.inventoryLabel, { color: theme.text }]}>{label}</Text>
+                      <Text style={[imd.inventoryStatus, { color: iconColor }]}>{statusText}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Check-in/out times */}
+            {(student.checkInTime || student.checkOutTime) && (
+              <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                {!!student.checkInTime && (
+                  <View style={imd.infoRow}>
+                    <Feather name="log-in" size={14} color="#22c55e" />
+                    <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>Check-in</Text>
+                    <Text style={[imd.infoVal, { color: theme.text }]}>
+                      {new Date(student.checkInTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                    </Text>
                   </View>
-                );
-              })}
-            </View>
-          </View>
+                )}
+                {!!student.checkOutTime && (
+                  <View style={imd.infoRow}>
+                    <Feather name="log-out" size={14} color="#ef4444" />
+                    <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>Check-out</Text>
+                    <Text style={[imd.infoVal, { color: theme.text }]}>
+                      {new Date(student.checkOutTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-          {/* Check-in/out */}
-          {(student.checkInTime || student.checkOutTime) && (
+            {/* Student details — email instead of phone */}
             <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-              {!!student.checkInTime && (
-                <View style={imd.infoRow}>
-                  <Feather name="log-in" size={14} color="#22c55e" />
-                  <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>Check-in</Text>
-                  <Text style={[imd.infoVal, { color: theme.text }]}>
-                    {new Date(student.checkInTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
-                  </Text>
-                </View>
-              )}
-              {!!student.checkOutTime && (
-                <View style={imd.infoRow}>
-                  <Feather name="log-out" size={14} color="#ef4444" />
-                  <Text style={[imd.infoLabel, { color: theme.textSecondary }]}>Check-out</Text>
-                  <Text style={[imd.infoVal, { color: theme.text }]}>
-                    {new Date(student.checkOutTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}
-                  </Text>
-                </View>
-              )}
+              {!!email && <InfoRow icon="mail" label="Email" value={email} theme={theme} />}
+              {!!student.gender && <InfoRow icon="user" label="Gender" value={student.gender} theme={theme} />}
+              {!!student.age && <InfoRow icon="calendar" label="Age" value={String(student.age)} theme={theme} />}
+              {!!(student.allottedMess || student.assignedMess) && <InfoRow icon="coffee" label="Mess" value={student.allottedMess || student.assignedMess} theme={theme} />}
+              {!!emergency && <InfoRow icon="alert-circle" label="Emergency" value={emergency} theme={theme} />}
             </View>
-          )}
 
-          {/* Student details */}
-          <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            {!!student.gender && <InfoRow icon="user" label="Gender" value={student.gender} theme={theme} />}
-            {!!student.age && <InfoRow icon="calendar" label="Age" value={String(student.age)} theme={theme} />}
-            {!!(student.allottedMess || student.assignedMess) && <InfoRow icon="coffee" label="Mess" value={student.allottedMess || student.assignedMess} theme={theme} />}
-            {!!phone && <InfoRow icon="phone" label="Mobile" value={phone} theme={theme} />}
-            {!!emergency && <InfoRow icon="alert-circle" label="Emergency" value={emergency} theme={theme} />}
-          </View>
+            {/* Call button — still calls the phone number if available */}
+            {!!phone && (
+              <Pressable
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL(`tel:${phone}`); }}
+                style={imd.callBtn}
+              >
+                <Feather name="phone-call" size={16} color="#fff" />
+                <Text style={imd.callBtnText}>Call Student</Text>
+              </Pressable>
+            )}
 
-          {/* Call button */}
-          {!!phone && (
-            <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL(`tel:${phone}`); }}
-              style={imd.callBtn}
-            >
-              <Feather name="phone-call" size={16} color="#fff" />
-              <Text style={imd.callBtnText}>Call {phone}</Text>
+            <Pressable onPress={onClose} style={[imd.closeBtn, { borderColor: theme.border }]}>
+              <Text style={[imd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
             </Pressable>
-          )}
-
-          <Pressable onPress={onClose} style={[imd.closeBtn, { borderColor: theme.border }]}>
-            <Text style={[imd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
-          </Pressable>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -166,12 +187,14 @@ function hasPendingGiven(inv: any) {
     (inv?.pillow && !inv?.pillowSubmitted)
   );
 }
-function statusOf(student: any): "green" | "yellow" | "black" {
+function statusOf(student: any): "green" | "yellow" | "black" | "red" {
   const inv = student?.inventory || {};
   const isLocked = !!inv.inventoryLocked;
   const anyGiven = hasAnyGiven(inv);
   const pending = hasPendingGiven(inv);
+  const isCheckedOut = !!(student?.checkOutTime);
   if (isLocked || (anyGiven && !pending)) return "green";
+  if (isCheckedOut && pending) return "red"; // Checked out but items not returned
   if (pending) return "yellow";
   return "black";
 }
@@ -237,6 +260,7 @@ export default function InventoryTableScreen() {
   }, [data]);
 
   const submittedCount = items.filter(s => statusOf(s) === "green").length;
+  const missingCount = items.filter(s => statusOf(s) === "red").length;
   const pendingCount = items.filter(s => statusOf(s) === "yellow").length;
   const notTakenCount = items.filter(s => statusOf(s) === "black").length;
 
@@ -249,13 +273,13 @@ export default function InventoryTableScreen() {
         if (!haystack.includes(q)) return false;
       }
       if (filter === "submitted") return !!s.inventory?.inventoryLocked;
-      if (filter === "missing") return hasAnyGiven(s.inventory) && hasPendingGiven(s.inventory);
+      if (filter === "missing") return statusOf(s) === "yellow" || statusOf(s) === "red";
       return true;
     });
   }, [items, debouncedSearch, filter]);
 
   const sortedItems = useMemo(() => {
-    const priority = { yellow: 0, green: 1, black: 2 } as const;
+    const priority = { red: 0, yellow: 1, green: 2, black: 3 } as const;
     return [...filteredItems].sort((a, b) => {
       const sa = statusOf(a), sb = statusOf(b);
       if (priority[sa] !== priority[sb]) return priority[sa] - priority[sb];
@@ -302,6 +326,7 @@ export default function InventoryTableScreen() {
             <CompactMetric label="Submitted" value={String(submittedCount)} color="#22c55e" />
             <CompactMetric label="Pending" value={String(pendingCount)} color="#eab308" />
             <CompactMetric label="Not Taken" value={String(notTakenCount)} color="#64748b" />
+            {missingCount > 0 && <CompactMetric label="Checked Out—Missing" value={String(missingCount)} color="#ef4444" />}
           </ScrollView>
         </View>
       ) : (
@@ -311,7 +336,16 @@ export default function InventoryTableScreen() {
             <OverviewMetric label="Submitted" value={String(submittedCount)} color="#22c55e" />
             <OverviewMetric label="Pending" value={String(pendingCount)} color="#eab308" />
             <OverviewMetric label="Not Taken" value={String(notTakenCount)} color="#64748b" />
+            <OverviewMetric label="Checked Out—Missing" value={String(missingCount)} color="#ef4444" />
           </View>
+          {missingCount > 0 && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, backgroundColor: "#ef444410", borderRadius: 8, padding: 8 }}>
+              <Feather name="alert-triangle" size={12} color="#ef4444" />
+              <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#ef4444" }}>
+                {missingCount} student{missingCount !== 1 ? "s" : ""} checked out without returning inventory
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -408,7 +442,7 @@ export default function InventoryTableScreen() {
             const anyGiven = hasAnyGiven(inv);
             const rowStatus = statusOf(item);
             const isLocked = rowStatus === "green";
-            const borderLeftColor = rowStatus === "green" ? "#22c55e" : rowStatus === "yellow" ? "#eab308" : "#64748b";
+            const borderLeftColor = rowStatus === "green" ? "#22c55e" : rowStatus === "red" ? "#ef4444" : rowStatus === "yellow" ? "#eab308" : "#64748b";
 
             return (
               <Pressable
@@ -426,10 +460,38 @@ export default function InventoryTableScreen() {
               >
                 <View style={styles.nameCol}>
                   <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                  {/* Hostel + Room highlighted */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
+                    {!!(item.hostelName || item.hostelId) && (
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: theme.tint }} numberOfLines={1}>
+                        {item.hostelName || item.hostelId}
+                      </Text>
+                    )}
+                    {!!(item.hostelName || item.hostelId) && !!item.roomNumber && (
+                      <Text style={{ fontSize: 10, color: theme.textTertiary }}>·</Text>
+                    )}
+                    {!!item.roomNumber && (
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#8b5cf6" }} numberOfLines={1}>
+                        Rm {item.roomNumber}
+                      </Text>
+                    )}
+                  </View>
                   <Text style={[styles.studentMeta, { color: theme.textSecondary }]} numberOfLines={1}>
-                    {item.rollNumber || ""} {item.roomNumber ? `· ${item.roomNumber}` : ""}
+                    {item.rollNumber || item.email || ""}
                   </Text>
-                  {!isLocked && pendingSubmitItems.length > 0 && (
+                  {/* Check-in/out time */}
+                  {(item.checkInTime || item.checkOutTime) && (
+                    <Text style={[styles.studentMeta, { color: theme.textTertiary, fontSize: 10 }]} numberOfLines={1}>
+                      {item.checkInTime ? `In: ${new Date(item.checkInTime).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" })}` : ""}
+                      {item.checkOutTime ? ` · Out: ${new Date(item.checkOutTime).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, hour: "2-digit", minute: "2-digit" })}` : ""}
+                    </Text>
+                  )}
+                  {!isLocked && rowStatus === "red" && pendingSubmitItems.length > 0 && (
+                    <Text style={[styles.missingText, { color: "#ef4444" }]}>
+                      Missing: {pendingSubmitItems.join(", ")}
+                    </Text>
+                  )}
+                  {!isLocked && rowStatus === "yellow" && pendingSubmitItems.length > 0 && (
                     <Text style={[styles.missingText, { color: "#eab308" }]}>
                       Pending: {pendingSubmitItems.join(", ")}
                     </Text>
@@ -444,6 +506,10 @@ export default function InventoryTableScreen() {
                     <View style={styles.submittedBadge}>
                       <Feather name="lock" size={10} color="#16a34a" />
                       <Text style={styles.submittedText}>Done</Text>
+                    </View>
+                  ) : rowStatus === "red" ? (
+                    <View style={[styles.statusPill, { backgroundColor: "#fef2f2" }]}>
+                      <Text style={[styles.statusPillText, { color: "#dc2626" }]}>Missing</Text>
                     </View>
                   ) : rowStatus === "yellow" ? (
                     <View style={[styles.statusPill, { backgroundColor: "#fef9c3" }]}>
@@ -588,9 +654,12 @@ const styles = StyleSheet.create({
 // ─── InventoryStudentModal Styles ─────────────────────────────────────────────
 const imd = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 0, maxHeight: "92%" },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 14 },
-  sheetHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  locationChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  hostelChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5 },
+  hostelChipText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 20, fontFamily: "Inter_700Bold" },
   name: { fontSize: 15, fontFamily: "Inter_700Bold" },
