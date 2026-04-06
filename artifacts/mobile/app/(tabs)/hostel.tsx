@@ -4,7 +4,6 @@ import {
   Modal, ScrollView, RefreshControl, Platform, useColorScheme,
   ActivityIndicator,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
@@ -483,7 +482,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
 
       {!canWork && (
         <View style={stf.lockOverlay}>
-          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.85)" }]} />
           {!user?.hostelId && user?.role === "volunteer" ? (
             <View style={[stf.lockCard, { backgroundColor: theme.surface, borderColor: "#F5A62350" }]}>
               <View style={[stf.lockIconWrap, { backgroundColor: "#F5A62315" }]}>

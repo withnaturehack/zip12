@@ -67,9 +67,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchMe(token: string): Promise<User | null> {
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       if (!res.ok) return null;
-      return await res.json();
+      const data = await res.json().catch(() => null);
+      return data;
     } catch { return null; }
   }
 
@@ -132,16 +139,26 @@ export function useAuth() {
 export function useApiRequest() {
   const { token } = useAuth();
   return useCallback(async (path: string, options: RequestInit = {}) => {
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {}),
-      },
-    });
-    const data = await res.json().catch(() => { throw new Error("Invalid server response"); });
-    if (!res.ok) throw new Error(data.message || "Request failed");
-    return data;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(options.headers || {}),
+        },
+      });
+      clearTimeout(timeout);
+      const data = await res.json().catch(() => { throw new Error("Invalid server response"); });
+      if (!res.ok) throw new Error(data.message || "Request failed");
+      return data;
+    } catch (e: any) {
+      clearTimeout(timeout);
+      if (e.name === "AbortError") throw new Error("Request timed out. Check your connection.");
+      throw e;
+    }
   }, [token]);
 }

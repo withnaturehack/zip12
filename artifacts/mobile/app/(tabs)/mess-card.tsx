@@ -6,7 +6,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { deptMembersByEmail } from "@/constants/deptMembers";
@@ -383,7 +382,7 @@ export default function MessCardTabScreen() {
 
       {!canWork && (
         <View style={styles.lockOverlay}>
-          <BlurView intensity={70} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.88)" }]} />
           {!user?.hostelId && isVolunteer ? (
             <View style={[styles.lockCard, { backgroundColor: theme.surface, borderColor: "#F5A62350" }]}>
               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#F5A62315", alignItems: "center", justifyContent: "center" }}>
