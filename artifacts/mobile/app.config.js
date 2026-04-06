@@ -1,8 +1,12 @@
+const PROD_API = "https://zip-12--vpahaddevbhoomi.replit.app/api";
+
 module.exports = function applyAppConfig({ config }) {
   const explicitApiUrl = process.env.EXPO_PUBLIC_API_URL;
-
   const proxyUrl = process.env.EXPO_PUBLIC_WEB_ORIGIN || "https://localhost";
-  const apiUrl = explicitApiUrl || "http://localhost:8080/api";
+
+  // IMPORTANT: never fall back to localhost — real devices cannot reach it.
+  // Always use the production API unless an explicit override is provided.
+  const apiUrl = explicitApiUrl || PROD_API;
 
   return {
     ...config,

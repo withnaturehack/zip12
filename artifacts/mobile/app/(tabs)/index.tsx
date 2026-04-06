@@ -106,68 +106,81 @@ export default function HomeScreen() {
     return Array.from(new Set([...(assignedHostelIds || []), user?.hostelId || ""].filter(Boolean)));
   }, [isSuperAdmin, user?.role, user?.hostelId, assignedHostelIds]);
 
+  const safe = React.useCallback(
+    (fn: () => Promise<any>, fallback: any = null) => fn().catch(() => fallback),
+    []
+  );
+
   const { data: announcements, refetch: refetchAnn, isLoading: annLoading } = useQuery({
     queryKey: ["announcements"],
-    queryFn: () => request("/announcements"),
+    queryFn: () => safe(() => request("/announcements"), []),
     staleTime: 60000,
     refetchInterval: 120000,
+    retry: 1,
   });
 
   const isStaff = isVolunteer || isCoordinator || isSuperAdmin;
   const { data: attStats, refetch: refetchStats } = useQuery({
     queryKey: ["att-stats"],
-    queryFn: () => request("/attendance/stats"),
+    queryFn: () => safe(() => request("/attendance/stats")),
     enabled: isStaff,
     refetchInterval: 30000,
     staleTime: 15000,
+    retry: 1,
   });
 
   const { data: reportSummary } = useQuery({
     queryKey: ["report-summary"],
-    queryFn: () => request("/reports/summary"),
+    queryFn: () => safe(() => request("/reports/summary")),
     enabled: isCoordinator,
     refetchInterval: 60000,
     staleTime: 30000,
+    retry: 1,
   });
 
   const { data: scopedStudentsMeta } = useQuery<any>({
     queryKey: ["students-scope-total"],
-    queryFn: () => request("/students?limit=1&offset=0"),
+    queryFn: () => safe(() => request("/students?limit=1&offset=0")),
     enabled: isCoordinator && !isSuperAdmin,
     refetchInterval: 60000,
     staleTime: 30000,
+    retry: 1,
   });
 
   const { data: messStats, refetch: refetchMess } = useQuery<any>({
     queryKey: ["mess-stats"],
-    queryFn: () => request("/mess-attendance/stats"),
+    queryFn: () => safe(() => request("/mess-attendance/stats")),
     enabled: isStaff,
     refetchInterval: 30000,
     staleTime: 15000,
+    retry: 1,
   });
 
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
-    queryFn: () => request("/staff/me-status"),
+    queryFn: () => safe(() => request("/staff/me-status"), { isActive: false, lastActiveAt: null }),
     enabled: isVolunteer && !isSuperAdmin,
     refetchInterval: 30000,
     staleTime: 15000,
+    retry: 1,
   });
 
   const { data: pendingCount } = useQuery<{ count: number }>({
     queryKey: ["pending-count"],
-    queryFn: () => request("/approvals/count"),
+    queryFn: () => safe(() => request("/approvals/count"), { count: 0 }),
     enabled: isSuperAdmin,
     refetchInterval: 60000,
     staleTime: 30000,
+    retry: 1,
   });
 
   const { data: allHostels = [] } = useQuery<any[]>({
     queryKey: ["hostels"],
-    queryFn: () => request("/hostels"),
+    queryFn: () => safe(() => request("/hostels"), []),
     enabled: isAdmin || isVolunteer,
     refetchInterval: 120000,
     staleTime: 60000,
+    retry: 1,
   });
 
   const assignedHostels = React.useMemo(() => {
@@ -205,10 +218,11 @@ export default function HomeScreen() {
 
   const { data: invStats } = useQuery<any>({
     queryKey: ["inv-stats"],
-    queryFn: () => request("/inventory-simple"),
+    queryFn: () => safe(() => request("/inventory-simple"), []),
     enabled: isCoordinator,
     refetchInterval: 30000,
     staleTime: 15000,
+    retry: 1,
   });
   const invStatsArr = Array.isArray(invStats) ? invStats as any[] : [];
   const invScopedArr = React.useMemo(() => {

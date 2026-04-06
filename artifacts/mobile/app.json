@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CampusOps Expo",
+    "name": "CampusOps",
     "slug": "mobile",
     "owner": "karzo15",
     "version": "1.0.0",
@@ -15,10 +15,16 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "in.iitm.campusops"
     },
     "android": {
-      "package": "in.iitm.campusops"
+      "package": "in.iitm.campusops",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "allowBackup": false
     },
     "web": {
       "favicon": "./assets/images/icon.png"
