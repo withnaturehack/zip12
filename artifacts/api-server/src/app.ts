@@ -11,13 +11,13 @@ import router from "./routes/index.js";
 
 const app: Express = express();
 
-// ✅ Trust proxy (important for Replit / deployment)
+// ✅ Trust proxy (important for Replit)
 app.set("trust proxy", 1);
 
-// ✅ Compression (faster responses)
+// ✅ Compression
 app.use(compression());
 
-// ✅ CORS (allow frontend access)
+// ✅ CORS
 app.use(
   cors({
     origin: "*",
@@ -34,7 +34,6 @@ app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // ================= RATE LIMITERS =================
 
-// 🔥 General limiter
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5000,
@@ -46,7 +45,6 @@ const generalLimiter = rateLimit({
   },
 });
 
-// 🔥 Auth limiter
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
@@ -79,7 +77,7 @@ app.use("/api/hostels", (req, res, next) => {
 // ✅ Apply auth limiter only to auth routes
 app.use("/api/auth", authLimiter);
 
-// ✅ Apply general limiter to all API routes
+// ✅ Apply general limiter
 app.use("/api", generalLimiter);
 
 // ✅ MAIN ROUTER
@@ -87,14 +85,19 @@ app.use("/api", router);
 
 // ================= HEALTH =================
 
-// ✅ Health check (no rate limit issues)
-app.get("/health", (_req, res) => {
+// ✅ FIXED HEALTH ROUTE
+app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+// ================= ROOT CHECK (OPTIONAL BUT HELPFUL) =================
+
+app.get("/", (_req, res) => {
+  res.json({ message: "CampusOps API Running 🚀" });
 });
 
 // ================= 404 HANDLER =================
 
-// ✅ Always return JSON (prevents `<` error)
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
     error: "Not Found",
@@ -104,7 +107,6 @@ app.use((_req: Request, res: Response) => {
 
 // ================= ERROR HANDLER =================
 
-// ✅ Global error handler (prevents HTML crash)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[ERROR]:", err);
 

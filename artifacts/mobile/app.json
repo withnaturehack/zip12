@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CampusOps",
-    "slug": "accom-iitm",
+    "slug": "mobile",
     "owner": "karzo15",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -50,7 +50,7 @@
         "headOrigin": "https://zip-12--vpahaddevbhoomi.replit.app"
       },
       "eas": {
-        "projectId": "217a0d10-9271-4c17-a14f-b58bb774e48d"
+        "projectId": "d15d6c97-8294-43d8-adbc-f874fb918911"
       }
     }
   }
