@@ -188,26 +188,6 @@ export default function AuthScreen() {
                 }
               </Pressable>
 
-              {/* Demo accounts */}
-              <View style={[styles.demoBox, { backgroundColor: isDark ? "#1a1a1a" : "#f9fafb", borderColor: isDark ? "#2a2a2a" : "#e5e7eb" }]}>
-                <Text style={[styles.demoTitle, { color: theme.textTertiary }]}>DEMO ACCOUNTS  ·  password: 123456</Text>
-                <View style={styles.demoGrid}>
-                  {[
-                    { label: "Student", email: "student@iitm.ac.in", color: "#22c55e" },
-                    { label: "Volunteer", email: "volunteer@iitm.ac.in", color: "#3b82f6" },
-                    { label: "Admin", email: "admin@iitm.ac.in", color: "#f59e0b" },
-                    { label: "Super Admin", email: "superadmin@iitm.ac.in", color: "#8b5cf6" },
-                  ].map(({ label, email, color }) => (
-                    <Pressable
-                      key={email}
-                      onPress={() => { setLoginEmail(email); setLoginPass("123456"); Haptics.selectionAsync(); }}
-                      style={[styles.demoChip, { backgroundColor: color + "15", borderColor: color + "40" }]}
-                    >
-                      <Text style={[styles.demoChipText, { color }]}>{label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
             </View>
           )}
 
@@ -293,11 +273,6 @@ const styles = StyleSheet.create({
   eyeBtn: { padding: 2 },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 13, paddingVertical: 15, marginTop: 6, marginBottom: 16 },
   primaryBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
-  demoBox: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
-  demoTitle: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.8, textAlign: "center" },
-  demoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
-  demoChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  demoChipText: { fontSize: 12, fontFamily: "Inter_700Bold" },
   infoBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 6 },
   infoText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 },
   pendingBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 16 },

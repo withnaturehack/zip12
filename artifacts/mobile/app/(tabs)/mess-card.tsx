@@ -8,7 +8,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
-import { deptMembersByEmail } from "@/constants/deptMembers";
 import * as Haptics from "expo-haptics";
 
 function fmt(ts?: string | null) {
@@ -38,7 +37,6 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
 }) {
   if (!selected) return null;
   const d = selectedDetails || selected;
-  const csv = deptMembersByEmail[(d?.email || "").toLowerCase()];
   const hasPass = !!selected.messCard;
   const phone = d.mobileNumber || d.contactNumber || d.phone || "";
   const emergency = d.emergencyContact || "";
@@ -89,24 +87,22 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
                   <Text style={[sd.chipText, { color: "#f59e0b" }]}>{mess}</Text>
                 </View>
               )}
-              {!!(csv?.gender || d.gender) && (
+              {!!d.gender && (
                 <View style={[sd.chip, { backgroundColor: "#3b82f615", borderColor: "#3b82f640" }]}>
                   <Feather name="user" size={11} color="#3b82f6" />
-                  <Text style={[sd.chipText, { color: "#3b82f6" }]}>{csv?.gender || d.gender}</Text>
+                  <Text style={[sd.chipText, { color: "#3b82f6" }]}>{d.gender}</Text>
                 </View>
               )}
-              {!!(csv?.age || d.age) && (
+              {!!d.age && (
                 <View style={[sd.chip, { backgroundColor: "#8b5cf615", borderColor: "#8b5cf640" }]}>
-                  <Text style={[sd.chipText, { color: "#8b5cf6" }]}>Age {csv?.age || d.age}</Text>
+                  <Text style={[sd.chipText, { color: "#8b5cf6" }]}>Age {d.age}</Text>
                 </View>
               )}
             </View>
 
-            {/* Academic / personal info */}
-            {(csv?.stream || csv?.role || phone || emergency) && (
+            {/* Contact info */}
+            {(phone || emergency) && (
               <View style={[sd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                {!!csv?.stream && <InfoRow icon="book" label="Stream" value={csv.stream} theme={theme} />}
-                {!!csv?.role && <InfoRow icon="tag" label="Role" value={csv.role} theme={theme} />}
                 {!!phone && <InfoRow icon="phone" label="Mobile" value={phone} theme={theme} accent="#3b82f6" />}
                 {!!emergency && <InfoRow icon="alert-circle" label="Emergency" value={emergency} theme={theme} accent="#ef4444" />}
               </View>
