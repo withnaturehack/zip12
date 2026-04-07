@@ -295,7 +295,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   const [selectedHostel, setSelectedHostel] = useState(ALL_HOSTELS);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 350);
-  const [students, setStudents] = useState<any[]>(() => (qc.getQueryData<any[]>(["hostel-students-cache"]) || []));
+  const [students, setStudents] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -315,8 +315,17 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
     return { list, total: Number(tot) };
   }, [request, debouncedSearch, selectedHostel]);
 
+  const hasActiveQuery = debouncedSearch.trim().length > 0 || selectedHostel !== ALL_HOSTELS;
+
   const load = useCallback(async (reset = false) => {
     if (!canWork) { setHasMore(false); return; }
+    if (!hasActiveQuery) {
+      setStudents([]);
+      setTotal(0);
+      setHasMore(false);
+      setLoading(false);
+      return;
+    }
     if (loadingRef.current && !reset) return;
     loadingRef.current = true;
     if (reset) {
@@ -340,17 +349,17 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
     loadingRef.current = false;
     setLoading(false);
     setLoadingMore(false);
-  }, [doFetch, canWork, qc]);
+  }, [doFetch, canWork, hasActiveQuery, qc]);
 
   // Reload when shift becomes active, or filter/search changes
   useEffect(() => { load(true); }, [debouncedSearch, selectedHostel, canWork]);
 
-  // Auto-refresh every 15s
+  // Auto-refresh every 30s only when actively searching
   useEffect(() => {
-    if (!canWork) return;
-    const t = setInterval(() => { if (!loadingRef.current) load(true); }, 15000);
+    if (!canWork || !hasActiveQuery) return;
+    const t = setInterval(() => { if (!loadingRef.current) load(true); }, 30000);
     return () => clearInterval(t);
-  }, [load, canWork]);
+  }, [load, canWork, hasActiveQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -450,15 +459,23 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
           maxToRenderPerBatch={20}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           ListEmptyComponent={
-            <View style={stf.empty}>
-              <Feather name="users" size={44} color={theme.textTertiary} />
-              <Text style={[stf.emptyTitle, { color: theme.text }]}>No students found</Text>
-              {search.length > 0 && (
+            !hasActiveQuery ? (
+              <View style={stf.empty}>
+                <Feather name="search" size={44} color={theme.textTertiary} />
+                <Text style={[stf.emptyTitle, { color: theme.text }]}>Search Students</Text>
                 <Text style={[stf.emptyHint, { color: theme.textSecondary }]}>
-                  Try searching by name, roll number, or room
+                  Enter a name, roll number, or room to find students
                 </Text>
-              )}
-            </View>
+              </View>
+            ) : (
+              <View style={stf.empty}>
+                <Feather name="users" size={44} color={theme.textTertiary} />
+                <Text style={[stf.emptyTitle, { color: theme.text }]}>No students found</Text>
+                <Text style={[stf.emptyHint, { color: theme.textSecondary }]}>
+                  Try a different name, roll number, or room
+                </Text>
+              </View>
+            )
           }
           ListFooterComponent={loadingMore ? (
             <ActivityIndicator color={theme.tint} style={{ marginVertical: 16 }} />

@@ -14,7 +14,7 @@ import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 import { useDebounce } from "@/hooks/useDebounce";
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 50;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -611,13 +611,12 @@ export default function AttendanceTab() {
   }, [isStudent, debouncedSearch, canWork]);
 
   useEffect(() => {
-    if (isStudent || (!isCoordinator && !isSuperAdmin) || !canWork) return;
-    const intervalMs = 3000;
+    if (isStudent || !canWork) return;
     const timer = setInterval(() => {
       fetchStudents(true, true);
-    }, intervalMs);
+    }, 20000);
     return () => clearInterval(timer);
-  }, [isStudent, isCoordinator, isSuperAdmin, fetchStudents, canWork]);
+  }, [isStudent, fetchStudents, canWork]);
 
   const goActive = async () => {
     setActivating(true);

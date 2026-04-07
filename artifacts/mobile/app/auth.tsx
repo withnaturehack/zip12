@@ -91,10 +91,11 @@ export default function AuthScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24, flexGrow: 1, justifyContent: "center" }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 24, flexGrow: 1 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ flex: 1, justifyContent: "center" }}>
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.logoWrap}>
@@ -243,6 +244,7 @@ export default function AuthScreen() {
               </Pressable>
             </View>
           )}
+        </View>
         </View>
 
         <Text style={[styles.footer, { color: theme.textTertiary }]}>IIT Madras BS Programme · Hostel Operations</Text>

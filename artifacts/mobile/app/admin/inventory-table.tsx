@@ -242,11 +242,11 @@ export default function InventoryTableScreen() {
     queryKey: ["inventory-simple"],
     queryFn: async () => { try { return await request("/inventory-simple") || []; } catch { return []; } },
     enabled: canWork,
-    staleTime: 0,
+    staleTime: 20000,
     gcTime: 10 * 60 * 1000,
-    refetchOnMount: "always",
-    refetchInterval: 5000,
-    refetchIntervalInBackground: true,
+    refetchOnMount: true,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 
