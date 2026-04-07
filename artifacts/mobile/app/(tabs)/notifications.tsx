@@ -9,7 +9,7 @@ import {
   Platform,
   useColorScheme,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -252,7 +252,7 @@ export default function NotificationsScreen() {
   const isStudent = user?.role === "student";
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
         <Text style={[styles.pageTitle, { color: theme.text }]}>
           {isStudent ? "Notifications" : "Announcements"}
@@ -273,7 +273,7 @@ export default function NotificationsScreen() {
           <Feather name="plus" size={22} color="#fff" />
         </Pressable>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

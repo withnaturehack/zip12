@@ -4,7 +4,7 @@ import {
   Platform, useColorScheme, ActivityIndicator, RefreshControl, Alert,
   TextInput,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -292,7 +292,7 @@ export default function ActivityLogsScreen() {
   const uniqueStaff = [...new Set(filtered.map(l => l.userId))].length;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -399,7 +399,7 @@ export default function ActivityLogsScreen() {
         theme={theme}
         token={token}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

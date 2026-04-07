@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TextInput, StyleSheet, Pressable,
   Platform, useColorScheme, ActivityIndicator, Modal, ScrollView,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -151,7 +151,7 @@ export default function SearchScreen() {
   const attColor = (s?: string) => s === "entered" ? "#22c55e" : "#f59e0b";
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -251,7 +251,7 @@ export default function SearchScreen() {
         onClose={() => setModalVisible(false)}
         theme={theme}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

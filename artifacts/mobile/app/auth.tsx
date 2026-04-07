@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
   ScrollView, useColorScheme, Alert, Image, Dimensions,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -86,12 +86,13 @@ export default function AuthScreen() {
   }];
 
   return (
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: isDark ? "#000" : "#fff" }]}>
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: isDark ? "#000" : "#fff" }]}
+      style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20, flexGrow: 1, justifyContent: "center" }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: 16, paddingBottom: insets.bottom + 20, flexGrow: 1, justifyContent: "center" }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -248,6 +249,7 @@ export default function AuthScreen() {
         <Text style={[styles.footer, { color: theme.textTertiary }]}>IIT Madras BS Programme · Hostel Operations</Text>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

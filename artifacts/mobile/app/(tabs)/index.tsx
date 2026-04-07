@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, Pressable,
   RefreshControl, Platform, useColorScheme, ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -304,10 +304,10 @@ export default function HomeScreen() {
   const pendingNum = pendingCount?.count ?? 0;
 
   return (
-    <>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.background }]}
-        contentContainerStyle={{ paddingTop: topPad, paddingBottom: isWeb ? 80 : 100 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: isWeb ? 80 : 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         showsVerticalScrollIndicator={false}
       >
@@ -671,7 +671,7 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-    </>
+    </SafeAreaView>
   );
 }
 

@@ -5,7 +5,7 @@ import {
   Platform, useColorScheme, Share, Linking, useWindowDimensions,
 } from "react-native";
 import { ScrollView } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -744,8 +744,8 @@ export default function HostelsAdminScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 24, borderColor: theme.border }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { paddingTop: 16, borderColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Feather name="arrow-left" size={24} color={theme.text} />
         </Pressable>
@@ -922,7 +922,7 @@ export default function HostelsAdminScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

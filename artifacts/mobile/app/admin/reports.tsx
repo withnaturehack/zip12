@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, Pressable,
   RefreshControl, Platform, useColorScheme, Alert, Share,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -119,7 +119,7 @@ export default function ReportsScreen() {
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={theme.text} />
@@ -232,7 +232,7 @@ export default function ReportsScreen() {
           </Pressable>
         ))}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, Pressable, StyleSheet, TextInput,
   Modal, ActivityIndicator, useColorScheme, ScrollView, Linking,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -265,8 +265,8 @@ export default function MessCardTabScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 24, borderBottomColor: theme.border }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <View>
           <Text style={[styles.title, { color: theme.text }]}>Mess Card</Text>
           <Text style={[styles.sub, { color: theme.textSecondary }]}>
@@ -422,7 +422,7 @@ export default function MessCardTabScreen() {
           )}
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

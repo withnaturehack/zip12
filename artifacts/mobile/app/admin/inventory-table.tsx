@@ -4,7 +4,7 @@ import {
   Platform, useColorScheme, useWindowDimensions, Modal, Linking, Alert, Share,
   ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -357,7 +357,7 @@ export default function InventoryTableScreen() {
   ] as const;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       {/* ── Header ── */}
       <View style={[{ paddingTop: topPad, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }]}>
         <View style={styles.headerRow}>
@@ -589,7 +589,7 @@ export default function InventoryTableScreen() {
           </View>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

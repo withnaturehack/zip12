@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet, Pressable,
   Alert, Platform, useColorScheme,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -77,9 +77,10 @@ export default function ProfileScreen() {
   ];
 
   return (
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
     <ScrollView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      contentContainerStyle={{ paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingTop: 16, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
       showsVerticalScrollIndicator={false}
     >
       {/* Avatar + Name */}
@@ -151,6 +152,7 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Logout</Text>
       </Pressable>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 

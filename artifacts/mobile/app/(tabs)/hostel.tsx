@@ -4,7 +4,7 @@ import {
   Modal, ScrollView, RefreshControl, Platform, useColorScheme,
   ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -382,7 +382,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   return (
     <View style={[{ flex: 1, backgroundColor: theme.background }]}>
       {/* Header */}
-      <View style={[stf.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+      <View style={[stf.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <View style={stf.headerTop}>
           <Text style={[stf.title, { color: theme.text }]}>Students</Text>
           {total > 0 && (
@@ -603,7 +603,7 @@ function StudentHostelView({ theme, insets }: { theme: any; insets: any }) {
   if (isLoading) {
     return (
       <View style={[{ flex: 1, backgroundColor: theme.background }]}>
-        <View style={[stf.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+        <View style={[stf.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
           <Text style={[stf.title, { color: theme.text }]}>My Hostel</Text>
         </View>
         <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /></View>
@@ -615,7 +615,7 @@ function StudentHostelView({ theme, insets }: { theme: any; insets: any }) {
 
   return (
     <View style={[{ flex: 1, backgroundColor: theme.background }]}>
-      <View style={[stf.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+      <View style={[stf.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <Text style={[stf.title, { color: theme.text }]}>My Hostel</Text>
         {hostel?.name && <Text style={[stf.hostelSubtitle, { color: theme.textSecondary }]}>{hostel.name}</Text>}
       </View>
@@ -739,8 +739,16 @@ export default function HostelTab() {
   const insets = useSafeAreaInsets();
   const { isStudent } = useAuth();
 
-  if (isStudent) return <StudentHostelView theme={theme} insets={insets} />;
-  return <StaffStudentsView theme={theme} insets={insets} isDark={isDark} />;
+  if (isStudent) return (
+    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: theme.background }}>
+      <StudentHostelView theme={theme} insets={insets} />
+    </SafeAreaView>
+  );
+  return (
+    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: theme.background }}>
+      <StaffStudentsView theme={theme} insets={insets} isDark={isDark} />
+    </SafeAreaView>
+  );
 }
 
 // ─── Student Detail Styles ─────────────────────────────────────────────────────

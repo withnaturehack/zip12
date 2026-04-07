@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, StyleSheet, Pressable, RefreshControl,
   Platform, Modal, TextInput, ActivityIndicator, Alert, useColorScheme,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -270,8 +270,8 @@ export default function StudentsAdminScreen() {
   ), [theme, hostels]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 24, borderColor: theme.border }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { paddingTop: 16, borderColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color={theme.text} />
         </Pressable>
@@ -436,7 +436,7 @@ export default function StudentsAdminScreen() {
         theme={theme}
         request={request}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

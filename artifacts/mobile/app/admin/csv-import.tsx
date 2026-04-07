@@ -4,7 +4,7 @@ import {
   Platform, useColorScheme, ActivityIndicator, Alert,
   TextInput, Linking,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -155,9 +155,10 @@ export default function CsvImportScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={theme.text} />
         </Pressable>
@@ -288,6 +289,7 @@ export default function CsvImportScreen() {
         )}
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 

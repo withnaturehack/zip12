@@ -4,7 +4,7 @@ import {
   Platform, useColorScheme, ActivityIndicator, TextInput,
   Modal, ScrollView, Alert,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -433,7 +433,7 @@ const StudentRow = React.memo(function StudentRow({ item, theme, onPress }: { it
 
 // ─── Student Self View ─────────────────────────────────────────────────────────
 
-function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: any; request: any; topPad: number }) {
+function StudentSelfView({ theme, user, request }: { theme: any; user: any; request: any }) {
   const [state, setState] = useState<CheckinState | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -463,8 +463,8 @@ function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: a
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.pageHeader, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <Text style={[styles.pageTitle, { color: theme.text }]}>Attendance</Text>
         <Text style={[styles.pageSubtitle, { color: theme.textSecondary }]}>Today's status</Text>
       </View>
@@ -521,7 +521,7 @@ function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: a
           </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -633,12 +633,12 @@ export default function AttendanceTab() {
   };
 
   if (isStudent) {
-    return <StudentSelfView theme={theme} user={user} request={request} topPad={topPad} />;
+    return <StudentSelfView theme={theme} user={user} request={request} />;
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.pageHeader, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.pageHeader, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={[styles.pageTitle, { color: theme.text }]}>Attendance</Text>
           {allStudents.length > 0 && (
@@ -726,7 +726,7 @@ export default function AttendanceTab() {
           </View>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

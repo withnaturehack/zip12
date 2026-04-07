@@ -4,7 +4,7 @@ import {
   ActivityIndicator, useColorScheme, Modal, ScrollView,
   Platform,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -223,7 +223,7 @@ export default function ApprovalsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Pending Approvals</Text>
         {(pending as PendingUser[]).length > 0 && (
@@ -297,7 +297,7 @@ export default function ApprovalsScreen() {
         request={request}
         qc={qc}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
