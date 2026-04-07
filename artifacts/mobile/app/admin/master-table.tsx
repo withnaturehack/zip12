@@ -305,7 +305,7 @@ export default function MasterTableScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const request = useApiRequest();
   const { user } = useAuth();
 
@@ -582,7 +582,7 @@ export default function MasterTableScreen() {
           keyExtractor={(item, i) => item?.id || String(i)}
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border + "80" }} />}
           onEndReached={() => { if (shown < filtered.length) setShown(s => s + PAGE); }}
           onEndReachedThreshold={0.4}

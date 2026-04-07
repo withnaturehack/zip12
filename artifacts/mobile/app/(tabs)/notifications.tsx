@@ -108,7 +108,7 @@ function StudentNotifications({ theme, user, onUnreadCount }: { theme: any; user
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+      contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       showsVerticalScrollIndicator={false}
     >
@@ -253,7 +253,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
         <Text style={[styles.pageTitle, { color: theme.text }]}>
           {isStudent ? "Notifications" : "Announcements"}
         </Text>

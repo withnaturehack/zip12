@@ -271,7 +271,7 @@ export default function StudentsAdminScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 16, borderColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 24, borderColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={24} color={theme.text} />
         </Pressable>

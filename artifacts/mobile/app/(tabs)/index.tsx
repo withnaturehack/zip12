@@ -83,7 +83,7 @@ export default function HomeScreen() {
   const request = useApiRequest();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -307,7 +307,7 @@ export default function HomeScreen() {
     <>
       <ScrollView
         style={[styles.container, { backgroundColor: theme.background }]}
-        contentContainerStyle={{ paddingTop: topPad, paddingBottom: isWeb ? 34 : 108 }}
+        contentContainerStyle={{ paddingTop: topPad, paddingBottom: isWeb ? 80 : 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         showsVerticalScrollIndicator={false}
       >

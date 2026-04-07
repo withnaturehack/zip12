@@ -126,7 +126,7 @@ export default function StaffStatusScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const request = useApiRequest();
   const qc = useQueryClient();
   const { user, isSuperAdmin, isCoordinator, isVolunteer } = useAuth();
@@ -242,7 +242,7 @@ export default function StaffStatusScreen() {
         data={isVolunteer ? volunteerStaff : []}
         keyExtractor={s => s.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListHeaderComponent={() => (
           <>

@@ -19,7 +19,7 @@ export default function ProfileScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const { user, logout, isCoordinator, isVolunteer, isSuperAdmin, isStudent } = useAuth();
   const request = useApiRequest();
 
@@ -79,7 +79,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
-      contentContainerStyle={{ paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+      contentContainerStyle={{ paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
       showsVerticalScrollIndicator={false}
     >
       {/* Avatar + Name */}

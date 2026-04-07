@@ -209,7 +209,7 @@ export default function InventoryTableScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const isCompact = !isWeb && width < 430;
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const request = useApiRequest();
   const { isVolunteer, isSuperAdmin } = useAuth();
   const qc = useQueryClient();
@@ -461,7 +461,7 @@ export default function InventoryTableScreen() {
             const roll = String(i?.rollNumber || "").trim().toLowerCase();
             return id || roll || String(idx);
           }}
-          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}
           removeClippedSubviews
           windowSize={11}
           initialNumToRender={20}

@@ -266,7 +266,7 @@ export default function MessCardTabScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 16, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 24, borderBottomColor: theme.border }]}>
         <View>
           <Text style={[styles.title, { color: theme.text }]}>Mess Card</Text>
           <Text style={[styles.sub, { color: theme.textSecondary }]}>
@@ -337,7 +337,7 @@ export default function MessCardTabScreen() {
         <FlatList
           data={visibleStudents}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 66 }} />}
           renderItem={({ item }) => (
             <Pressable

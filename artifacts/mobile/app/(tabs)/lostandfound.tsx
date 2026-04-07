@@ -469,7 +469,7 @@ function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: a
         <Text style={[styles.pageSubtitle, { color: theme.textSecondary }]}>Today's status</Text>
       </View>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       >
         {loading ? (
@@ -533,7 +533,7 @@ export default function AttendanceTab() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
 
   const { user, isStudent, isCoordinator, isSuperAdmin, isVolunteer } = useAuth();
   const request = useApiRequest();
@@ -669,7 +669,7 @@ export default function AttendanceTab() {
       <FlatList
         data={allStudents}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 14, paddingBottom: Platform.OS === "web" ? 24 : 80 }}
+        contentContainerStyle={{ padding: 14, paddingBottom: Platform.OS === "web" ? 72 : 90 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         onEndReached={() => hasMore && !loading && fetchStudents()}
         onEndReachedThreshold={0.4}

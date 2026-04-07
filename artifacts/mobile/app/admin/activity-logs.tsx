@@ -231,7 +231,7 @@ export default function ActivityLogsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const request = useApiRequest();
   const { token } = useAuth();
   const [filter, setFilter] = useState("all");
@@ -353,7 +353,7 @@ export default function ActivityLogsScreen() {
       <FlatList
         data={filtered}
         keyExtractor={l => l.id}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: Platform.OS === "web" ? 24 : 100, flexGrow: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: Platform.OS === "web" ? 80 : 90, flexGrow: 1 }}
         showsVerticalScrollIndicator
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}

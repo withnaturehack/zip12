@@ -70,7 +70,7 @@ export default function CsvImportScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
   const { token } = useAuth();
   const [selectedType, setSelectedType] = useState<ImportType | null>(null);
   const [csvText, setCsvText] = useState("");
@@ -155,7 +155,7 @@ export default function CsvImportScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>

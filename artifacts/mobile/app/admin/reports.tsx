@@ -29,7 +29,7 @@ export default function ReportsScreen() {
   const request = useApiRequest();
   const { token, user } = useAuth();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 16;
+  const topPad = insets.top + 24;
 
   const { data: summary, isLoading, refetch } = useQuery({
     queryKey: ["reports-summary"],
@@ -129,7 +129,7 @@ export default function ReportsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         showsVerticalScrollIndicator={false}
       >
