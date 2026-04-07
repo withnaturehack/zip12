@@ -273,10 +273,24 @@ export default function InventoryTableScreen() {
     return Array.from(map.values());
   }, [data]);
 
-  const greenCount  = useMemo(() => items.filter(s => statusOf(s) === "green").length,  [items]);
-  const yellowCount = useMemo(() => items.filter(s => statusOf(s) === "yellow").length, [items]);
-  const redCount    = useMemo(() => items.filter(s => statusOf(s) === "red").length,    [items]);
-  const grayCount   = useMemo(() => items.filter(s => statusOf(s) === "gray").length,   [items]);
+  // Pre-compute status once per item — avoids 6× redundant calls across memos
+  const statusMap = useMemo(() => {
+    const m = new Map<string, "green" | "yellow" | "gray" | "red">();
+    for (const s of items) {
+      const k = String(s?.id ?? s?.rollNumber ?? s?.email ?? "");
+      if (k) m.set(k, statusOf(s));
+    }
+    return m;
+  }, [items]);
+  const stOf = (s: any) => {
+    const k = String(s?.id ?? s?.rollNumber ?? s?.email ?? "");
+    return statusMap.get(k) ?? statusOf(s);
+  };
+
+  const greenCount  = useMemo(() => items.filter(s => stOf(s) === "green").length,  [statusMap]);
+  const yellowCount = useMemo(() => items.filter(s => stOf(s) === "yellow").length, [statusMap]);
+  const redCount    = useMemo(() => items.filter(s => stOf(s) === "red").length,    [statusMap]);
+  const grayCount   = useMemo(() => items.filter(s => stOf(s) === "gray").length,   [statusMap]);
 
   const filteredItems = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -286,22 +300,23 @@ export default function InventoryTableScreen() {
           .filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (filter === "submitted")  return statusOf(s) === "green";
-      if (filter === "pending")    return statusOf(s) === "yellow";
-      if (filter === "red")        return statusOf(s) === "red";
-      if (filter === "not_taken")  return statusOf(s) === "gray";
+      const st = stOf(s);
+      if (filter === "submitted")  return st === "green";
+      if (filter === "pending")    return st === "yellow";
+      if (filter === "red")        return st === "red";
+      if (filter === "not_taken")  return st === "gray";
       return true;
     });
-  }, [items, debouncedSearch, filter]);
+  }, [items, debouncedSearch, filter, statusMap]);
 
   const sortedItems = useMemo(() => {
     const priority = { red: 0, yellow: 1, gray: 2, green: 3 } as const;
     return [...filteredItems].sort((a, b) => {
-      const pa = priority[statusOf(a)], pb = priority[statusOf(b)];
+      const pa = priority[stOf(a)], pb = priority[stOf(b)];
       if (pa !== pb) return pa - pb;
       return String(a?.name || "").localeCompare(String(b?.name || ""));
     });
-  }, [filteredItems]);
+  }, [filteredItems, statusMap]);
 
   const lastSyncAgoSec = Math.max(0, Math.floor((liveNow - dataUpdatedAt) / 1000));
 
@@ -379,26 +394,15 @@ export default function InventoryTableScreen() {
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={22} color={theme.text} />
           </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: theme.text }]}>Inventory</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>Inventory</Text>
             <View style={styles.liveRow}>
               <View style={styles.liveDot} />
-              <Text style={[styles.liveText, { color: theme.textSecondary }]}>
+              <Text style={[styles.liveText, { color: theme.textSecondary }]} numberOfLines={1}>
                 Live · synced {lastSyncAgoSec}s ago
               </Text>
             </View>
           </View>
-          <Pressable
-            onPress={exportCSV}
-            disabled={exporting}
-            style={[styles.exportBtn, { backgroundColor: "#22c55e15", borderColor: "#22c55e40" }]}
-            hitSlop={6}
-          >
-            {exporting
-              ? <ActivityIndicator size="small" color="#22c55e" />
-              : <Feather name="download" size={15} color="#22c55e" />}
-            <Text style={[styles.exportBtnText, { color: "#22c55e" }]}>CSV</Text>
-          </Pressable>
         </View>
 
         {/* Filter pills */}
@@ -450,6 +454,16 @@ export default function InventoryTableScreen() {
           <View style={[styles.countBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "30" }]}>
             <Text style={[styles.countBadgeText, { color: theme.tint }]}>{sortedItems.length}</Text>
           </View>
+          <Pressable
+            onPress={exportCSV}
+            disabled={exporting}
+            style={[styles.exportIconBtn, { backgroundColor: "#22c55e12", borderColor: "#22c55e30" }]}
+            hitSlop={8}
+          >
+            {exporting
+              ? <ActivityIndicator size="small" color="#22c55e" />
+              : <Feather name="share" size={15} color="#22c55e" />}
+          </Pressable>
         </View>
 
       </View>
@@ -491,7 +505,7 @@ export default function InventoryTableScreen() {
           }
           renderItem={({ item }) => {
             const inv = item.inventory || {};
-            const rowStatus = statusOf(item);
+            const rowStatus = stOf(item);
             const m = STATUS_META[rowStatus];
             const isLocked = rowStatus === "green";
 
@@ -616,11 +630,10 @@ const styles = StyleSheet.create({
   liveRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 1 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" },
   liveText: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  exportBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
+  exportIconBtn: {
+    width: 36, height: 36, borderRadius: 10, borderWidth: 1,
+    alignItems: "center", justifyContent: "center",
   },
-  exportBtnText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   filterRow: { gap: 8, paddingVertical: 2 },
   filterPill: {
     flexDirection: "row", alignItems: "center", gap: 6,

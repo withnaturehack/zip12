@@ -101,8 +101,6 @@ export default function AuthScreen() {
           <View style={styles.logoWrap}>
             <Image source={LOGO} style={styles.logo} resizeMode="cover" />
           </View>
-          <Text style={[styles.appName, { color: theme.text }]}>Paradox</Text>
-          <Text style={[styles.appSub, { color: "#f59e0b" }]}>ACCOMMODATION</Text>
           <Text style={[styles.caption, { color: theme.textSecondary }]}>IIT Madras Hostel Management</Text>
         </View>
 
@@ -257,7 +255,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 20, alignItems: "stretch" },
   hero: { alignItems: "center", marginBottom: 28, gap: 4 },
-  logoWrap: { width: 96, height: 96, borderRadius: 48, overflow: "hidden", marginBottom: 12, borderWidth: 3, borderColor: "#f59e0b40" },
+  logoWrap: { width: 160, height: 160, borderRadius: 80, overflow: "hidden", marginBottom: 14, borderWidth: 3, borderColor: "#f59e0b50" },
   logo: { width: "100%", height: "100%" },
   appName: { fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   appSub: { fontSize: 12, fontFamily: "Inter_700Bold", letterSpacing: 3, marginTop: -2 },
