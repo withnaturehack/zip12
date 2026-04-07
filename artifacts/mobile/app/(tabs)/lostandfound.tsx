@@ -5,7 +5,8 @@ import {
   Modal, ScrollView, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -544,13 +545,24 @@ export default function AttendanceTab() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const debouncedSearch = useDebounce(search, 300);
 
+  const qc = useQueryClient();
   const requiresShift = isVolunteer && !isSuperAdmin;
+
+  const fetchStudentsRef = React.useRef<((reset?: boolean, silent?: boolean) => void) | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ["my-status"] });
+      fetchStudentsRef.current?.(true, true);
+    }, [qc])
+  );
+
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
     queryFn: () => request("/staff/me-status"),
     enabled: requiresShift,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 8000,
   });
   const canWork = !requiresShift || !!myStatus?.isActive;
 
@@ -573,6 +585,8 @@ export default function AttendanceTab() {
     } catch { }
     if (!silent) setLoading(false);
   }, [isStudent, request, debouncedSearch, page, hasMore, canWork]);
+
+  useEffect(() => { fetchStudentsRef.current = fetchStudents; }, [fetchStudents]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

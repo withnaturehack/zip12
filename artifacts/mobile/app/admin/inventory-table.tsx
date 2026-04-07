@@ -5,9 +5,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
@@ -205,7 +205,15 @@ export default function InventoryTableScreen() {
   const topPad = (isWeb ? 67 : insets.top) + 8;
   const request = useApiRequest();
   const { isVolunteer, isSuperAdmin } = useAuth();
+  const qc = useQueryClient();
   const [exporting, setExporting] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ["inventory-simple"] });
+      qc.invalidateQueries({ queryKey: ["my-status"] });
+    }, [qc])
+  );
 
   const [filter, setFilter] = useState<"all" | "pending" | "submitted" | "not_taken" | "red">("all");
   const [search, setSearch] = useState("");
@@ -218,8 +226,8 @@ export default function InventoryTableScreen() {
     queryKey: ["my-status"],
     queryFn: async () => { try { return await request("/staff/me-status"); } catch { return { isActive: false, lastActiveAt: null }; } },
     enabled: requiresShift,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 8000,
   });
   const canWork = !requiresShift || !!myStatus?.isActive;
 

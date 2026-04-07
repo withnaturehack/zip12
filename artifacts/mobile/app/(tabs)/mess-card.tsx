@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   View, Text, FlatList, Pressable, StyleSheet, TextInput,
   Modal, ActivityIndicator, useColorScheme, ScrollView, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
@@ -175,12 +176,20 @@ export default function MessCardTabScreen() {
   const [open, setOpen] = useState(false);
   const [activating, setActivating] = useState(false);
   const requiresShift = isVolunteer && !isSuperAdmin;
+
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ["mess-card-students"] });
+      qc.invalidateQueries({ queryKey: ["my-status"] });
+    }, [qc])
+  );
+
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
     queryFn: () => request("/staff/me-status"),
     enabled: requiresShift,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 8000,
   });
   const canWork = !requiresShift || !!myStatus?.isActive;
 
@@ -189,7 +198,7 @@ export default function MessCardTabScreen() {
     queryFn: () => request(`/students?limit=300&offset=0${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ""}`),
     enabled: canWork,
     refetchInterval: 8000,
-    staleTime: 2000,
+    staleTime: 4000,
   });
 
   const rawStudents = (Array.isArray(data) ? data : data?.students || []) as any[];

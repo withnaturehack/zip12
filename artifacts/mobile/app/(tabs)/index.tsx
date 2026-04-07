@@ -4,9 +4,10 @@ import {
   RefreshControl, Platform, useColorScheme, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth, useApiRequest } from "@/context/AuthContext";
@@ -86,6 +87,12 @@ export default function HomeScreen() {
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries();
+    }, [qc])
+  );
+
   const isAdmin = user?.role === "admin" || user?.role === "coordinator";
   const assignedHostelIds: string[] = React.useMemo(() => {
     try {
@@ -114,8 +121,9 @@ export default function HomeScreen() {
   const { data: announcements, refetch: refetchAnn, isLoading: annLoading } = useQuery({
     queryKey: ["announcements"],
     queryFn: () => safe(() => request("/announcements"), []),
-    staleTime: 60000,
-    refetchInterval: 120000,
+    staleTime: 30000,
+    refetchInterval: 60000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -124,8 +132,9 @@ export default function HomeScreen() {
     queryKey: ["att-stats"],
     queryFn: () => safe(() => request("/attendance/stats")),
     enabled: isStaff,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 8000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -133,8 +142,9 @@ export default function HomeScreen() {
     queryKey: ["report-summary"],
     queryFn: () => safe(() => request("/reports/summary")),
     enabled: isCoordinator,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 30000,
+    staleTime: 15000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -144,6 +154,7 @@ export default function HomeScreen() {
     enabled: isCoordinator && !isSuperAdmin,
     refetchInterval: 60000,
     staleTime: 30000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -151,8 +162,9 @@ export default function HomeScreen() {
     queryKey: ["mess-stats"],
     queryFn: () => safe(() => request("/mess-attendance/stats")),
     enabled: isStaff,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 8000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -160,8 +172,9 @@ export default function HomeScreen() {
     queryKey: ["my-status"],
     queryFn: () => safe(() => request("/staff/me-status"), { isActive: false, lastActiveAt: null }),
     enabled: isVolunteer && !isSuperAdmin,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 8000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -169,8 +182,9 @@ export default function HomeScreen() {
     queryKey: ["pending-count"],
     queryFn: () => safe(() => request("/approvals/count"), { count: 0 }),
     enabled: isSuperAdmin,
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 30000,
+    staleTime: 15000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 
@@ -180,6 +194,7 @@ export default function HomeScreen() {
     enabled: isAdmin || isVolunteer,
     refetchInterval: 120000,
     staleTime: 60000,
+    placeholderData: keepPreviousData,
     retry: 1,
   });
 

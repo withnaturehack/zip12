@@ -31,10 +31,6 @@ args = "API Server"
 task = "workflow.run"
 args = "Mobile App"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Expo Go Tunnel"
-
 [[workflows.workflow]]
 name = "API Server"
 author = "agent"
@@ -58,17 +54,6 @@ outputType = "webview"
 task = "shell.exec"
 args = "pnpm --filter @workspace/mobile run dev"
 waitForPort = 8099
-
-[[workflows.workflow]]
-name = "Expo Go Tunnel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/mobile run tunnel"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"
