@@ -359,7 +359,7 @@ export default function InventoryTableScreen() {
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       {/* ── Header ── */}
-      <View style={[{ paddingTop: topPad, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+      <View style={[{ paddingTop: 16, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }]}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={22} color={theme.text} />

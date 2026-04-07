@@ -224,7 +224,7 @@ export default function ApprovalsScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>Pending Approvals</Text>
         {(pending as PendingUser[]).length > 0 && (
           <View style={[styles.badge, { backgroundColor: "#ef4444" }]}>

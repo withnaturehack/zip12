@@ -454,7 +454,7 @@ export default function MasterTableScreen() {
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: topPad, backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: 16, backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Feather name="arrow-left" size={22} color={theme.text} />
         </Pressable>

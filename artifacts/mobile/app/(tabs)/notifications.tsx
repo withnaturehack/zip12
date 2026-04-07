@@ -253,7 +253,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
+      <View style={[styles.header, { paddingTop: 16 }]}>
         <Text style={[styles.pageTitle, { color: theme.text }]}>
           {isStudent ? "Notifications" : "Announcements"}
         </Text>

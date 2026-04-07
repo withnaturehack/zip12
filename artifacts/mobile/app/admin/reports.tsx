@@ -120,7 +120,7 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: topPad, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={theme.text} />
         </Pressable>
