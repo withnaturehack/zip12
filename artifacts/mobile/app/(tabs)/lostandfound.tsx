@@ -534,18 +534,18 @@ export default function AttendanceTab() {
 
   const { user, isStudent, isCoordinator, isSuperAdmin, isVolunteer } = useAuth();
   const request = useApiRequest();
+  const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [allStudents, setAllStudents] = useState<any[]>([]);
+  const [allStudents, setAllStudents] = useState<any[]>(() => qc.getQueryData<any[]>(["students-att-cache"]) || []);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !(qc.getQueryData<any[]>(["students-att-cache"])?.length));
   const [activating, setActivating] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const debouncedSearch = useDebounce(search, 300);
 
-  const qc = useQueryClient();
   const requiresShift = isVolunteer && !isSuperAdmin;
 
   const fetchStudentsRef = React.useRef<((reset?: boolean, silent?: boolean) => void) | null>(null);
@@ -579,12 +579,13 @@ export default function AttendanceTab() {
       const data = await request(`/students?${params}`);
       const list: any[] = Array.isArray(data) ? data : (data.students || data.data || []);
       setAllStudents(prev => reset ? list : [...prev, ...list]);
+      if (reset) qc.setQueryData(["students-att-cache"], list);
       setHasMore(list.length === PAGE_SIZE);
       if (!reset) setPage(p => p + 1);
       else setPage(1);
     } catch { }
     if (!silent) setLoading(false);
-  }, [isStudent, request, debouncedSearch, page, hasMore, canWork]);
+  }, [isStudent, request, debouncedSearch, page, hasMore, canWork, qc]);
 
   useEffect(() => { fetchStudentsRef.current = fetchStudents; }, [fetchStudents]);
 

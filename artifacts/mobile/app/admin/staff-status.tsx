@@ -129,7 +129,7 @@ export default function StaffStatusScreen() {
   const topPad = (isWeb ? 67 : insets.top) + 8;
   const request = useApiRequest();
   const qc = useQueryClient();
-  const { user, isSuperAdmin, isCoordinator } = useAuth();
+  const { user, isSuperAdmin, isCoordinator, isVolunteer } = useAuth();
 
   const [remarkModal, setRemarkModal] = useState(false);
   const [goingActive, setGoingActive] = useState(true);
@@ -155,7 +155,7 @@ export default function StaffStatusScreen() {
   const { data: allStaff = [], isLoading, refetch: refetchAll } = useQuery<any[]>({
     queryKey: ["staff-all"],
     queryFn: () => request("/staff/all"),
-    enabled: isCoordinator,
+    enabled: isVolunteer,
     refetchInterval: 30000,
     staleTime: 15000,
     refetchOnWindowFocus: true,
@@ -237,7 +237,7 @@ export default function StaffStatusScreen() {
       </View>
 
       <FlatList
-        data={isCoordinator ? volunteerStaff : []}
+        data={isVolunteer ? volunteerStaff : []}
         keyExtractor={s => s.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
@@ -286,7 +286,7 @@ export default function StaffStatusScreen() {
             )}
 
             {/* Summary */}
-            {isCoordinator && (
+            {isVolunteer && (
               <>
                 <View style={styles.summaryRow}>
                   <View style={[styles.summaryCard, { backgroundColor: "#22c55e12", borderColor: "#22c55e40" }]}>
@@ -295,7 +295,7 @@ export default function StaffStatusScreen() {
                   </View>
                   <View style={[styles.summaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Text style={[styles.summaryNum, { color: theme.text }]}>{totalStaff}</Text>
-                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Volunteers</Text>
+                    <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total</Text>
                   </View>
                   <View style={[styles.summaryCard, { backgroundColor: "#f59e0b12", borderColor: "#f59e0b40" }]}>
                     <Text style={[styles.summaryNum, { color: "#f59e0b" }]}>{totalStaff - onlineCount}</Text>
@@ -303,7 +303,7 @@ export default function StaffStatusScreen() {
                   </View>
                 </View>
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                  {isSuperAdmin ? "All Staff" : "Assigned Volunteers"}
+                  {isSuperAdmin ? "All Staff" : isCoordinator ? "Assigned Volunteers" : "Co-Volunteers at Your Hostel"}
                 </Text>
               </>
             )}

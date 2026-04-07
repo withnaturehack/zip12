@@ -139,21 +139,28 @@ function InventoryStudentModal({ student, visible, onClose, theme }: {
               })}
             </View>
 
-            {/* Check-in/out */}
-            {(student.checkInTime || student.checkOutTime) && (
-              <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                {!!student.checkInTime && (
-                  <InfoRow icon="log-in" label="Check-in" value={
-                    new Date(student.checkInTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })
-                  } theme={theme} color="#22c55e" />
-                )}
-                {!!student.checkOutTime && (
-                  <InfoRow icon="log-out" label="Check-out" value={
-                    new Date(student.checkOutTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })
-                  } theme={theme} color="#ef4444" />
-                )}
-              </View>
-            )}
+            {/* Check-in/out — always shown */}
+            <Text style={[imd.sectionTitle, { color: theme.text }]}>Attendance Today</Text>
+            <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <InfoRow
+                icon="log-in"
+                label="Check-in"
+                value={student.checkInTime
+                  ? new Date(student.checkInTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })
+                  : "Not checked in"}
+                theme={theme}
+                color={student.checkInTime ? "#22c55e" : undefined}
+              />
+              <InfoRow
+                icon="log-out"
+                label="Check-out"
+                value={student.checkOutTime
+                  ? new Date(student.checkOutTime).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })
+                  : student.checkInTime ? "Still inside" : "—"}
+                theme={theme}
+                color={student.checkOutTime ? "#6366f1" : undefined}
+              />
+            </View>
 
             {/* Contact info */}
             <View style={[imd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -236,7 +243,7 @@ export default function InventoryTableScreen() {
     queryFn: async () => { try { return await request("/inventory-simple") || []; } catch { return []; } },
     enabled: canWork,
     staleTime: 0,
-    gcTime: 0,
+    gcTime: 10 * 60 * 1000,
     refetchOnMount: "always",
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
@@ -352,30 +359,32 @@ export default function InventoryTableScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: topPad, backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-          <Feather name="arrow-left" size={22} color={theme.text} />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: theme.text }]}>Inventory</Text>
-          <View style={styles.liveRow}>
-            <View style={styles.liveDot} />
-            <Text style={[styles.liveText, { color: theme.textSecondary }]}>
-              Live · synced {lastSyncAgoSec}s ago
-            </Text>
+      <View style={[{ paddingTop: topPad, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+            <Feather name="arrow-left" size={22} color={theme.text} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.title, { color: theme.text }]}>Inventory</Text>
+            <View style={styles.liveRow}>
+              <View style={styles.liveDot} />
+              <Text style={[styles.liveText, { color: theme.textSecondary }]}>
+                Live · synced {lastSyncAgoSec}s ago
+              </Text>
+            </View>
           </View>
+          <Pressable
+            onPress={exportCSV}
+            disabled={exporting}
+            style={[styles.exportBtn, { backgroundColor: "#22c55e15", borderColor: "#22c55e40" }]}
+            hitSlop={6}
+          >
+            {exporting
+              ? <ActivityIndicator size="small" color="#22c55e" />
+              : <Feather name="download" size={15} color="#22c55e" />}
+            <Text style={[styles.exportBtnText, { color: "#22c55e" }]}>CSV</Text>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={exportCSV}
-          disabled={exporting}
-          style={[styles.exportBtn, { backgroundColor: "#22c55e15", borderColor: "#22c55e40" }]}
-          hitSlop={6}
-        >
-          {exporting
-            ? <ActivityIndicator size="small" color="#22c55e" />
-            : <Feather name="download" size={15} color="#22c55e" />}
-          <Text style={[styles.exportBtnText, { color: "#22c55e" }]}>CSV</Text>
-        </Pressable>
       </View>
 
       {/* ── Status Filter Cards ── */}
@@ -442,7 +451,7 @@ export default function InventoryTableScreen() {
         </View>
       </View>
 
-      {isLoading ? (
+      {isLoading && items.length === 0 ? (
         <View style={{ padding: 20 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
       ) : (
         <FlatList
@@ -586,9 +595,9 @@ export default function InventoryTableScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
+  headerRow: {
     flexDirection: "row", alignItems: "center", paddingHorizontal: 14,
-    paddingBottom: 10, borderBottomWidth: 1, gap: 8,
+    paddingBottom: 10, gap: 8,
   },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontFamily: "Inter_700Bold" },

@@ -142,8 +142,8 @@ router.get("/logs", requireAdmin, async (req: AuthRequest, res) => {
   res.json(page.map(l => ({ ...l, createdAt: l.createdAt.toISOString() })));
 });
 
-// GET /api/staff/all — all staff list with online status and hostel name (coordinator+)
-router.get("/all", requireAdmin, async (req: AuthRequest, res) => {
+// GET /api/staff/all — all staff list with online status and hostel name (volunteer+)
+router.get("/all", requireVolunteer, async (req: AuthRequest, res) => {
   const [caller] = await db.select({ role: usersTable.role, hostelId: usersTable.hostelId, assignedHostelIds: usersTable.assignedHostelIds })
     .from(usersTable).where(eq(usersTable.id, req.userId!));
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
