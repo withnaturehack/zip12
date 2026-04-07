@@ -582,7 +582,7 @@ export default function MasterTableScreen() {
           keyExtractor={(item, i) => item?.id || String(i)}
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border + "80" }} />}
           onEndReached={() => { if (shown < filtered.length) setShown(s => s + PAGE); }}
           onEndReachedThreshold={0.4}

@@ -185,7 +185,7 @@ export default function SearchScreen() {
       <FlatList
         data={results}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
         keyboardShouldPersistTaps="handled"
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}

@@ -353,7 +353,7 @@ export default function ActivityLogsScreen() {
       <FlatList
         data={filtered}
         keyExtractor={l => l.id}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 100, flexGrow: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: Platform.OS === "web" ? 24 : 100, flexGrow: 1 }}
         showsVerticalScrollIndicator
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}

@@ -461,7 +461,7 @@ export default function InventoryTableScreen() {
             const roll = String(i?.rollNumber || "").trim().toLowerCase();
             return id || roll || String(idx);
           }}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
           removeClippedSubviews
           windowSize={11}
           initialNumToRender={20}

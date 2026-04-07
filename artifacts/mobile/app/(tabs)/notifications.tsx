@@ -108,7 +108,7 @@ function StudentNotifications({ theme, user, onUnreadCount }: { theme: any; user
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 100 }}
+      contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       showsVerticalScrollIndicator={false}
     >

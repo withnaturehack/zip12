@@ -129,7 +129,7 @@ export default function ReportsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         showsVerticalScrollIndicator={false}
       >

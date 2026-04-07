@@ -91,7 +91,7 @@ export default function AuthScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20, flexGrow: 1, justifyContent: "space-between" }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20, flexGrow: 1, justifyContent: "center" }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -254,7 +254,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 20, alignItems: "stretch" },
-  hero: { alignItems: "center", marginBottom: 0, gap: 4 },
+  hero: { alignItems: "center", marginBottom: 28, gap: 4 },
   logoWrap: { width: 96, height: 96, borderRadius: 48, overflow: "hidden", marginBottom: 12, borderWidth: 3, borderColor: "#f59e0b40" },
   logo: { width: "100%", height: "100%" },
   appName: { fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
@@ -278,6 +278,6 @@ const styles = StyleSheet.create({
   pendingBanner: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
   pendingTitle: { fontSize: 14, fontFamily: "Inter_700Bold", marginBottom: 2 },
   pendingBody: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  footer: { textAlign: "center", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 0, paddingBottom: 8 },
+  footer: { textAlign: "center", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 24, paddingBottom: 8 },
   input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, fontFamily: "Inter_400Regular" },
 });

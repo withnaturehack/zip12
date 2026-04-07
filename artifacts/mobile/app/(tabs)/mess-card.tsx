@@ -337,7 +337,7 @@ export default function MessCardTabScreen() {
         <FlatList
           data={visibleStudents}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 24 : 100 }}
           ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 66 }} />}
           renderItem={({ item }) => (
             <Pressable

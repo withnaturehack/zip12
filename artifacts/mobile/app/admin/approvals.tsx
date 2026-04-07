@@ -236,7 +236,7 @@ export default function ApprovalsScreen() {
       <FlatList
         data={pending as PendingUser[]}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
         refreshing={isLoading}
         onRefresh={refetch}
         renderItem={({ item }) => (

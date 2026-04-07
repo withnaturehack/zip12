@@ -242,7 +242,7 @@ export default function StaffStatusScreen() {
         data={isVolunteer ? volunteerStaff : []}
         keyExtractor={s => s.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListHeaderComponent={() => (
           <>

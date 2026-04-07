@@ -79,7 +79,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.background }]}
-      contentContainerStyle={{ paddingTop: topPad, paddingBottom: 100 }}
+      contentContainerStyle={{ paddingTop: topPad, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
       showsVerticalScrollIndicator={false}
     >
       {/* Avatar + Name */}

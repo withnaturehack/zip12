@@ -469,7 +469,7 @@ function StudentSelfView({ theme, user, request, topPad }: { theme: any; user: a
         <Text style={[styles.pageSubtitle, { color: theme.textSecondary }]}>Today's status</Text>
       </View>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 24 : 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
       >
         {loading ? (
@@ -669,7 +669,7 @@ export default function AttendanceTab() {
       <FlatList
         data={allStudents}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 14, paddingBottom: 80 }}
+        contentContainerStyle={{ padding: 14, paddingBottom: Platform.OS === "web" ? 24 : 80 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         onEndReached={() => hasMore && !loading && fetchStudents()}
         onEndReachedThreshold={0.4}
