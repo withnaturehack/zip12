@@ -101,7 +101,7 @@ export default function SearchScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
   const request = useApiRequest();
 
   const [query, setQuery] = useState("");

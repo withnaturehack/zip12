@@ -78,13 +78,13 @@ function ApproveModal({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.modalContainer, { backgroundColor: theme.background }]}>
         <View style={styles.dragHandle} />
-        <View style={[styles.modalHeader, { borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border, paddingTop: Math.max(modalInsets.top + 16, 56) }]}>
           <Text style={[styles.modalTitle, { color: theme.text }]}>Approve User</Text>
           <Pressable onPress={onClose} hitSlop={12}>
             <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 32, 64) }}>
           {/* User Info */}
           <View style={[styles.userCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={[styles.userAvatar, { backgroundColor: theme.tint + "20" }]}>
@@ -172,7 +172,7 @@ export default function ApprovalsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
   const request = useApiRequest();
   const qc = useQueryClient();
   const { isSuperAdmin } = useAuth();

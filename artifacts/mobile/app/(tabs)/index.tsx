@@ -83,7 +83,7 @@ export default function HomeScreen() {
   const request = useApiRequest();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 

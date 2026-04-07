@@ -29,7 +29,7 @@ export default function ReportsScreen() {
   const request = useApiRequest();
   const { token, user } = useAuth();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
 
   const { data: summary, isLoading, refetch } = useQuery({
     queryKey: ["reports-summary"],

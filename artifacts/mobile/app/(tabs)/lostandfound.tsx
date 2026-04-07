@@ -221,7 +221,7 @@ function AttendanceModal({
         {/* Drag handle */}
         <View style={styles.dragHandle} />
         {/* Header */}
-        <View style={[styles.modalHeader, { borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border, paddingTop: Math.max(modalInsets.top + 16, 56) }]}>
           <View style={[styles.modalAvatar, { backgroundColor: theme.tint + "20" }]}>
             <Text style={[styles.modalAvatarText, { color: theme.tint }]}>{(student.name || "?")[0].toUpperCase()}</Text>
           </View>
@@ -238,7 +238,7 @@ function AttendanceModal({
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 32, 64) }} showsVerticalScrollIndicator={false}>
           {loadingState ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
               <ActivityIndicator color={theme.tint} size="large" />
@@ -533,7 +533,7 @@ export default function AttendanceTab() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
 
   const { user, isStudent, isCoordinator, isSuperAdmin, isVolunteer } = useAuth();
   const request = useApiRequest();

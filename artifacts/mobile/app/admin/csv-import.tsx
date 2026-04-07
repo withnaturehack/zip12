@@ -70,7 +70,7 @@ export default function CsvImportScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
   const { token } = useAuth();
   const [selectedType, setSelectedType] = useState<ImportType | null>(null);
   const [csvText, setCsvText] = useState("");

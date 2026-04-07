@@ -380,7 +380,7 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
       <View style={[styles.detailModal, { backgroundColor: theme.background }]}>
         <View style={styles.dragHandle} />
         {/* Header */}
-        <View style={[styles.detailHeader, { borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
+        <View style={[styles.detailHeader, { borderBottomColor: theme.border, paddingTop: Math.max(modalInsets.top + 16, 56) }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.detailTitle, { color: theme.text }]}>{hostel.name}</Text>
             {hostel.location ? <Text style={[styles.detailSub, { color: theme.textSecondary }]}>{hostel.location}</Text> : null}
@@ -398,7 +398,7 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: Math.max(modalInsets.bottom + 32, 64) }} showsVerticalScrollIndicator={false}>
           {/* Info Cards */}
           <View style={styles.infoGrid}>
             {[

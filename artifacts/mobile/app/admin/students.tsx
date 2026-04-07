@@ -61,7 +61,7 @@ function StudentProfileModal({ visible, studentId, onClose, theme, request }: {
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.modal, { backgroundColor: theme.background }]}>
         <View style={styles.dragHandle} />
-        <View style={[styles.modalHeader, { borderColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
+        <View style={[styles.modalHeader, { borderColor: theme.border, paddingTop: Math.max(modalInsets.top + 16, 56) }]}>
           <Text style={[styles.modalTitle, { color: theme.text }]}>Student Profile</Text>
           <Pressable onPress={onClose} hitSlop={8}>
             <Feather name="x" size={24} color={theme.text} />
@@ -74,7 +74,7 @@ function StudentProfileModal({ visible, studentId, onClose, theme, request }: {
           <FlatList
             data={[{ key: "content" }]}
             keyExtractor={(i) => i.key}
-            contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }}
+            contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 32, 64) }}
             refreshControl={<RefreshControl refreshing={false} onRefresh={() => { refetchStudent(); refetchInventory(); refetchCheckins(); }} tintColor={theme.tint} />}
             renderItem={() => {
               const s = student || {};

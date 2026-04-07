@@ -126,7 +126,7 @@ export default function StaffStatusScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
   const request = useApiRequest();
   const qc = useQueryClient();
   const { user, isSuperAdmin, isCoordinator, isVolunteer } = useAuth();

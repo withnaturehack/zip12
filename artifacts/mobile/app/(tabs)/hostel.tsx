@@ -70,7 +70,7 @@ const StudentDetailModal = memo(function StudentDetailModal({
       <View style={[sd.container, { backgroundColor: theme.background }]}>
         <View style={sd.dragHandle} />
         {/* Profile header */}
-        <View style={[sd.profileHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
+        <View style={[sd.profileHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border, paddingTop: Math.max(modalInsets.top + 16, 56) }]}>
           <View style={[sd.avatar, { backgroundColor: theme.tint + "25" }]}>
             <Text style={[sd.avatarText, { color: theme.tint }]}>{initial}</Text>
           </View>
@@ -94,7 +94,7 @@ const StudentDetailModal = memo(function StudentDetailModal({
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 16, paddingBottom: Math.max(modalInsets.bottom + 24, 40), gap: 12 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: Math.max(modalInsets.bottom + 32, 64), gap: 12 }}
         >
           {/* Today's Attendance */}
           <Section title="TODAY'S ATTENDANCE" icon="clock" theme={theme}>
@@ -267,7 +267,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   const request = useApiRequest();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
 
   // ─── Shift requirement ───────────────────────────────────────────────────────
   const requiresShift = !isSuperAdmin;
@@ -570,7 +570,7 @@ function StudentHostelView({ theme, insets }: { theme: any; insets: any }) {
   const { user } = useAuth();
   const request = useApiRequest();
   const isWeb = Platform.OS === "web";
-  const topPad = insets.top + 24;
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: hostel, isLoading, refetch: refetchHostel } = useQuery<any>({
