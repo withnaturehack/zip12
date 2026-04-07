@@ -359,8 +359,10 @@ export default function InventoryTableScreen() {
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       {/* ── Header ── */}
-      <View style={[{ paddingTop: 16, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-        <View style={styles.headerRow}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+
+        {/* Title row */}
+        <View style={styles.headerTop}>
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={22} color={theme.text} />
           </Pressable>
@@ -385,59 +387,58 @@ export default function InventoryTableScreen() {
             <Text style={[styles.exportBtnText, { color: "#22c55e" }]}>CSV</Text>
           </Pressable>
         </View>
-      </View>
 
-      {/* ── Status Filter Cards ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterScroll}
-        style={[{ borderBottomWidth: 1, borderBottomColor: theme.border }]}
-      >
-        {FILTERS.map(f => {
-          const active = filter === f.key;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => { Haptics.selectionAsync(); setFilter(f.key); }}
-              style={[styles.filterCard, {
-                backgroundColor: active ? f.color + "18" : theme.surface,
-                borderColor: active ? f.color : theme.border,
-              }]}
-            >
-              <Text style={[styles.filterCardNum, { color: active ? f.color : theme.text }]}>{f.value}</Text>
-              <Text style={[styles.filterCardLabel, { color: active ? f.color : theme.textSecondary }]}>{f.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        {/* Filter pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {FILTERS.map(f => {
+            const active = filter === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => { Haptics.selectionAsync(); setFilter(f.key); }}
+                style={[styles.filterPill, {
+                  backgroundColor: active ? f.color + "18" : theme.background,
+                  borderColor: active ? f.color : theme.border,
+                }]}
+              >
+                <View style={[styles.filterDot, { backgroundColor: f.color, opacity: active ? 1 : 0.45 }]} />
+                <Text style={[styles.filterPillLabel, { color: active ? f.color : theme.textSecondary }]}>
+                  {f.label}
+                </Text>
+                <View style={[styles.filterBadge, { backgroundColor: active ? f.color + "22" : theme.border }]}>
+                  <Text style={[styles.filterBadgeText, { color: active ? f.color : theme.textTertiary }]}>
+                    {f.value}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-      {/* ── Search ── */}
-      <View style={[styles.searchRow, { borderBottomColor: theme.border }]}>
-        <View style={[styles.searchBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Feather name="search" size={14} color={theme.textSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Search by name, roll, room…"
-            placeholderTextColor={theme.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCapitalize="none"
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} hitSlop={8}>
-              <Feather name="x" size={14} color={theme.textSecondary} />
-            </Pressable>
-          )}
+        {/* Search + count row */}
+        <View style={styles.searchRow}>
+          <View style={[styles.searchBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Feather name="search" size={15} color={theme.textSecondary} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder="Search by name, roll, room…"
+              placeholderTextColor={theme.textTertiary}
+              value={search}
+              onChangeText={setSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch("")} hitSlop={8}>
+                <Feather name="x" size={14} color={theme.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+          <View style={[styles.countBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "30" }]}>
+            <Text style={[styles.countBadgeText, { color: theme.tint }]}>{sortedItems.length}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* ── Results count ── */}
-      <View style={[styles.resultsRow, { borderBottomColor: theme.border }]}>
-        <Text style={[styles.resultsText, { color: theme.textSecondary }]}>
-          {sortedItems.length} of {items.length} students
-        </Text>
       </View>
 
       {/* ── Table header ── */}
@@ -595,35 +596,36 @@ export default function InventoryTableScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerRow: {
-    flexDirection: "row", alignItems: "center", paddingHorizontal: 14,
-    paddingBottom: 10, gap: 8,
-  },
-  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  liveRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
+  header: { paddingTop: 16, paddingHorizontal: 16, paddingBottom: 14, gap: 12, borderBottomWidth: 1 },
+  headerTop: { flexDirection: "row", alignItems: "center", gap: 10 },
+  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", marginLeft: -4 },
+  title: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  liveRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 1 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" },
-  liveText: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  liveText: { fontSize: 11, fontFamily: "Inter_500Medium" },
   exportBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
   },
-  exportBtnText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  filterScroll: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  filterCard: {
-    minWidth: 84, alignItems: "center", paddingVertical: 8, paddingHorizontal: 10,
-    borderRadius: 12, borderWidth: 1.5, gap: 1,
+  exportBtnText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  filterRow: { gap: 8, paddingVertical: 2 },
+  filterPill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 7, paddingLeft: 10, paddingRight: 6,
+    borderRadius: 20, borderWidth: 1.5,
   },
-  filterCardNum: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  filterCardLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  searchRow: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
+  filterDot: { width: 7, height: 7, borderRadius: 4 },
+  filterPillLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  filterBadge: { borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, minWidth: 24, alignItems: "center" },
+  filterBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   searchBox: {
-    flexDirection: "row", alignItems: "center", gap: 8,
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
     borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10,
   },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
-  resultsRow: { paddingHorizontal: 14, paddingVertical: 5, borderBottomWidth: 1 },
-  resultsText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  countBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  countBadgeText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   tableHead: {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1,
