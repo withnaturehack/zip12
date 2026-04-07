@@ -266,7 +266,7 @@ export default function MessCardTabScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16, borderBottomColor: theme.border }]}>
         <View>
           <Text style={[styles.title, { color: theme.text }]}>Mess Card</Text>
           <Text style={[styles.sub, { color: theme.textSecondary }]}>

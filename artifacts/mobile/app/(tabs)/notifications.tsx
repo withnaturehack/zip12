@@ -253,7 +253,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={[styles.pageTitle, { color: theme.text }]}>
           {isStudent ? "Notifications" : "Announcements"}
         </Text>
