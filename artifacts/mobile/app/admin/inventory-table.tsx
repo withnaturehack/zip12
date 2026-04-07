@@ -13,6 +13,8 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 import { useDebounce } from "@/hooks/useDebounce";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
 function hasAnyGiven(inv: any) { return !!(inv?.mattress || inv?.bedsheet || inv?.pillow); }
@@ -28,7 +30,10 @@ function statusOf(student: any): "green" | "yellow" | "gray" | "red" {
   const isLocked = !!inv.inventoryLocked;
   const anyGiven = hasAnyGiven(inv);
   const pending = hasPendingGiven(inv);
+  const isCheckedIn = !!(student?.checkInTime);
   const isCheckedOut = !!(student?.checkOutTime);
+  // If never checked in and no items actually given → always gray (no false greens)
+  if (!isCheckedIn && !anyGiven) return "gray";
   if (isLocked || (anyGiven && !pending)) return "green";   // ✅ Submitted/Done
   if (isCheckedOut && pending) return "red";                  // 🔴 Checked out, didn't return
   if (pending) return "yellow";                               // 🟡 Pending return
@@ -339,7 +344,15 @@ export default function InventoryTableScreen() {
         a.href = url; a.download = "inventory_report.csv"; a.click();
         URL.revokeObjectURL(url);
       } else {
-        await Share.share({ message: csv, title: "Inventory Report" });
+        const filename = `inventory_${new Date().toISOString().slice(0,10)}.csv`;
+        const path = (FileSystem.cacheDirectory || "") + filename;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(path, { mimeType: "text/csv", dialogTitle: "Export Inventory CSV", UTI: "public.comma-separated-values-text" });
+        } else {
+          await Share.share({ message: csv, title: "Inventory Report" });
+        }
       }
     } catch (e: any) {
       if (e?.message !== "The user did not share")

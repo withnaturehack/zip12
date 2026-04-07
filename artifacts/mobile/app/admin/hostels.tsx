@@ -14,6 +14,8 @@ import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 const ROLE_COLORS: Record<string, string> = {
   volunteer: "#22c55e",
@@ -250,6 +252,89 @@ function AssignStaffModal({ hostel, visible, onClose, theme, request, queryClien
   );
 }
 
+// ─── Staff Detail Modal ────────────────────────────────────────────────────────
+const ROLE_LABELS: Record<string, string> = {
+  volunteer: "Volunteer", coordinator: "Coordinator", admin: "Admin", superadmin: "Super Admin",
+};
+function StaffDetailModal({ staff, visible, onClose, theme }: { staff: any; visible: boolean; onClose: () => void; theme: any }) {
+  if (!staff) return null;
+  const roleColor = ROLE_COLORS[staff.role] || "#6366f1";
+  const phone = staff.contactNumber || staff.mobileNumber || staff.phone || "";
+  const email = staff.email || "";
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={stmd.overlay} onPress={onClose}>
+        <Pressable style={[stmd.sheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
+          <View style={stmd.handle} />
+          <View style={[stmd.avatar, { backgroundColor: roleColor + "20" }]}>
+            <Text style={[stmd.avatarText, { color: roleColor }]}>{(staff.name || "?")[0].toUpperCase()}</Text>
+          </View>
+          <Text style={[stmd.name, { color: theme.text }]}>{staff.name}</Text>
+          <Text style={[stmd.email, { color: theme.textSecondary }]}>{email}</Text>
+          <View style={stmd.chips}>
+            <View style={[stmd.chip, { backgroundColor: roleColor + "15", borderColor: roleColor + "40" }]}>
+              <Text style={[stmd.chipText, { color: roleColor }]}>{ROLE_LABELS[staff.role] || staff.role}</Text>
+            </View>
+            {!!(staff.hostelName || staff.hostelId) && (
+              <View style={[stmd.chip, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
+                <Feather name="home" size={11} color={theme.tint} />
+                <Text style={[stmd.chipText, { color: theme.tint }]}>{staff.hostelName || staff.hostelId}</Text>
+              </View>
+            )}
+          </View>
+          <View style={[stmd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            {!!email && (
+              <View style={stmd.infoRow}>
+                <Feather name="mail" size={13} color="#6366f1" />
+                <Text style={[stmd.infoLabel, { color: theme.textSecondary }]}>Email</Text>
+                <Text style={[stmd.infoVal, { color: theme.text }]} numberOfLines={1}>{email}</Text>
+              </View>
+            )}
+            {!!phone && (
+              <View style={stmd.infoRow}>
+                <Feather name="phone" size={13} color="#22c55e" />
+                <Text style={[stmd.infoLabel, { color: theme.textSecondary }]}>Phone</Text>
+                <Text style={[stmd.infoVal, { color: theme.text }]}>{phone}</Text>
+              </View>
+            )}
+            {!!staff.area && (
+              <View style={stmd.infoRow}>
+                <Feather name="map-pin" size={13} color={theme.textTertiary} />
+                <Text style={[stmd.infoLabel, { color: theme.textSecondary }]}>Area</Text>
+                <Text style={[stmd.infoVal, { color: theme.text }]}>{staff.area}</Text>
+              </View>
+            )}
+            {!!staff.lastActiveAt && (
+              <View style={stmd.infoRow}>
+                <Feather name="clock" size={13} color={theme.textTertiary} />
+                <Text style={[stmd.infoLabel, { color: theme.textSecondary }]}>Last Active</Text>
+                <Text style={[stmd.infoVal, { color: theme.text }]}>{new Date(staff.lastActiveAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</Text>
+              </View>
+            )}
+            <View style={stmd.infoRow}>
+              <View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: staff.isOnline ? "#22c55e" : "#6b7280" }]} />
+              <Text style={[stmd.infoLabel, { color: theme.textSecondary }]}>Status</Text>
+              <Text style={[stmd.infoVal, { color: staff.isOnline ? "#22c55e" : "#6b7280" }]}>{staff.isOnline ? "Online" : "Offline"}</Text>
+            </View>
+          </View>
+          {!!phone && (
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL(`tel:${phone}`); }}
+              style={stmd.callBtn}
+            >
+              <Feather name="phone-call" size={16} color="#fff" />
+              <Text style={stmd.callBtnText}>Call {phone}</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={onClose} style={[stmd.closeBtn, { borderColor: theme.border }]}>
+            <Text style={[stmd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ─── Hostel Detail Modal ───────────────────────────────────────────────────────
 function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAdmin, queryClient }: {
   hostel: any; visible: boolean; onClose: () => void; theme: any; request: any; isSuperAdmin: boolean; queryClient: any;
@@ -259,6 +344,7 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showAssignStaff, setShowAssignStaff] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const { width } = useWindowDimensions();
 
   const { data: students = [], isLoading } = useQuery<any[]>({
@@ -368,9 +454,17 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
       }
     } else {
       try {
-        await Share.share({ message: csv, title: `${hostel.name} Student Report` });
+        const filename = `${(hostel.name || "hostel").replace(/\s+/g, "_")}_${new Date().toISOString().slice(0,10)}.csv`;
+        const path = (FileSystem.cacheDirectory || "") + filename;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(path, { mimeType: "text/csv", dialogTitle: `${hostel.name} Student Report`, UTI: "public.comma-separated-values-text" });
+        } else {
+          await Share.share({ message: csv, title: `${hostel.name} Student Report` });
+        }
       } catch (err: any) {
-        if (err.message !== "The user did not share") Alert.alert("Error", "Could not share report");
+        if (err?.message !== "The user did not share") Alert.alert("Error", "Could not share report");
       }
     }
   };
@@ -472,7 +566,11 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
                 (hostelStaff as any[]).map((s: any) => {
                   const color = ROLE_COLORS[s.role] || theme.tint;
                   return (
-                    <View key={s.id} style={[asd.staffRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <Pressable
+                      key={s.id}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedStaff(s); }}
+                      style={({ pressed }) => [asd.staffRow, { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.82 : 1 }]}
+                    >
                       <View style={[asd.avatar, { backgroundColor: color + "20" }]}>
                         <Text style={[asd.avatarText, { color }]}>{(s.name || "?")[0].toUpperCase()}</Text>
                       </View>
@@ -483,14 +581,17 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
                           <Text style={[asd.roleText, { color }]}>{s.role}</Text>
                         </View>
                       </View>
-                      <Pressable
-                        onPress={() => unassignStaff(s.id, s.name)}
-                        style={[asd.removeBtn]}
-                        hitSlop={8}
-                      >
-                        <Feather name="user-minus" size={16} color="#ef4444" />
-                      </Pressable>
-                    </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Feather name="chevron-right" size={14} color={theme.textTertiary} />
+                        <Pressable
+                          onPress={() => unassignStaff(s.id, s.name)}
+                          style={[asd.removeBtn]}
+                          hitSlop={8}
+                        >
+                          <Feather name="user-minus" size={16} color="#ef4444" />
+                        </Pressable>
+                      </View>
+                    </Pressable>
                   );
                 })
               )}
@@ -523,12 +624,17 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
 
           {isLoading ? (
             <><CardSkeleton /><CardSkeleton /></>
+          ) : !searchQ.trim() ? (
+            <View style={[styles.emptyBox, { backgroundColor: theme.surface, borderColor: theme.border, borderStyle: "dashed" }]}>
+              <Feather name="search" size={26} color={theme.textTertiary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                Type a name, roll no., or room to search {studentList.length} students
+              </Text>
+            </View>
           ) : filteredStudents.length === 0 ? (
             <View style={[styles.emptyBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Feather name="users" size={28} color={theme.textTertiary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                {searchQ ? "No students match your search" : "No students assigned"}
-              </Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No students match your search</Text>
             </View>
           ) : (
             <>
@@ -609,6 +715,12 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
           student={selectedStudent}
           visible={!!selectedStudent}
           onClose={() => setSelectedStudent(null)}
+          theme={theme}
+        />
+        <StaffDetailModal
+          staff={selectedStaff}
+          visible={!!selectedStaff}
+          onClose={() => setSelectedStaff(null)}
           theme={theme}
         />
         <AssignStaffModal
@@ -1024,4 +1136,25 @@ const asd = StyleSheet.create({
   assignBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, minWidth: 72, justifyContent: "center" },
   assignBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
   removeBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "#ef444415" },
+});
+
+const stmd = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40, alignItems: "center" },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 18 },
+  avatar: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  avatarText: { fontSize: 30, fontFamily: "Inter_700Bold" },
+  name: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 2 },
+  email: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", marginBottom: 12 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  infoCard: { width: "100%", borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 14 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
+  infoLabel: { fontSize: 12, fontFamily: "Inter_400Regular", width: 80 },
+  infoVal: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "right" },
+  callBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#22c55e", borderRadius: 14, paddingVertical: 13, width: "100%", marginBottom: 8 },
+  callBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+  closeBtn: { width: "100%", borderWidth: 1, borderRadius: 14, paddingVertical: 11, alignItems: "center" },
+  closeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

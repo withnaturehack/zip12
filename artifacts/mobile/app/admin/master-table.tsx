@@ -12,6 +12,8 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 const PAGE = 40;
 const FETCH_PAGE_SIZE = 1000;
@@ -436,7 +438,15 @@ export default function MasterTableScreen() {
         a.href = url; a.download = "master_table.csv"; a.click();
         URL.revokeObjectURL(url);
       } else {
-        await Share.share({ message: csv, title: "Master Table Export" });
+        const filename = `master_table_${new Date().toISOString().slice(0,10)}.csv`;
+        const path = (FileSystem.cacheDirectory || "") + filename;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(path, { mimeType: "text/csv", dialogTitle: "Export Master Table CSV", UTI: "public.comma-separated-values-text" });
+        } else {
+          await Share.share({ message: csv, title: "Master Table Export" });
+        }
       }
     } catch (e: any) {
       if (e?.message !== "The user did not share") Alert.alert("Export failed", e?.message || "Unknown error");
@@ -576,6 +586,14 @@ export default function MasterTableScreen() {
 
       {isLoading && (students as any[]).length === 0 ? (
         <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
+      ) : filter === "all" && !search.trim() && !hostelFilter ? (
+        <View style={styles.emptyState}>
+          <Feather name="search" size={44} color={theme.textTertiary} />
+          <Text style={[styles.emptyTitle, { color: theme.text }]}>Search or pick a filter</Text>
+          <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
+            {scopedArr.length.toLocaleString()} students total · use filters or search above
+          </Text>
+        </View>
       ) : (
         <FlatList
           data={visible}
