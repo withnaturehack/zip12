@@ -743,7 +743,7 @@ export default function HostelsAdminScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: (isWeb ? 67 : insets.top) + 8, borderColor: theme.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8, borderColor: theme.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Feather name="arrow-left" size={24} color={theme.text} />
         </Pressable>

@@ -265,7 +265,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   const request = useApiRequest();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
-  const topPad = (isWeb ? 67 : insets.top) + 8;
+  const topPad = insets.top + 8;
 
   // ─── Shift requirement ───────────────────────────────────────────────────────
   const requiresShift = !isSuperAdmin;
@@ -568,7 +568,7 @@ function StudentHostelView({ theme, insets }: { theme: any; insets: any }) {
   const { user } = useAuth();
   const request = useApiRequest();
   const isWeb = Platform.OS === "web";
-  const topPad = (isWeb ? 67 : insets.top) + 8;
+  const topPad = insets.top + 8;
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: hostel, isLoading, refetch: refetchHostel } = useQuery<any>({

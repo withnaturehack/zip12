@@ -170,7 +170,7 @@ export default function ApprovalsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = (isWeb ? 67 : insets.top) + 8;
+  const topPad = insets.top + 8;
   const request = useApiRequest();
   const qc = useQueryClient();
   const { isSuperAdmin } = useAuth();
