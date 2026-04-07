@@ -5,14 +5,18 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
-const JWT_SECRET = process.env.JWT_SECRET || "campusops-secret-2024";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("[SECURITY] JWT_SECRET env var is not set! Set a strong secret before deploying to production.");
+  process.exit(1);
+}
 
 export function generateId(): string {
   return crypto.randomBytes(8).toString("hex");
 }
 
 export function generateToken(userId: string, role: string): string {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ userId, role }, JWT_SECRET!, { expiresIn: "30d" });
 }
 
 // Async — never blocks the event loop
@@ -55,7 +59,7 @@ export async function requireAuth(
   }
   const token = authHeader.slice(7);
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, JWT_SECRET!) as {
       userId: string;
       role: string;
     };

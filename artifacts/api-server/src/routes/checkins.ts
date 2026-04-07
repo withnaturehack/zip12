@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, checkinsTable, usersTable, studentInventoryTable, attendanceTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireVolunteer, generateId, AuthRequest } from "../lib/auth.js";
 
 const router = Router();
@@ -312,6 +312,22 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
 
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
 
+  const scoped = scopedHostels(caller);
+
+  // Reject early if no hostel access
+  if (scoped && scoped.length === 0) { res.json([]); return; }
+  if (scoped && requestedHostelId && !scoped.includes(requestedHostelId)) { res.json([]); return; }
+
+  // Build WHERE conditions in SQL — filter date and hostel in the database, not in JS
+  const effectiveHostels = requestedHostelId
+    ? [requestedHostelId]
+    : scoped;
+
+  const conditions = [eq(checkinsTable.date, targetDate)];
+  if (effectiveHostels) {
+    conditions.push(inArray(checkinsTable.hostelId, effectiveHostels));
+  }
+
   const rows = await db.select({
     id: checkinsTable.id,
     studentId: checkinsTable.studentId,
@@ -329,25 +345,12 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     studentMess: usersTable.assignedMess,
   }).from(checkinsTable)
     .leftJoin(usersTable, eq(checkinsTable.studentId, usersTable.id))
+    .where(and(...conditions))
     .orderBy(desc(checkinsTable.checkInTime))
     .limit(limit)
     .offset(offset);
 
-  let filtered = rows.filter(r => r.date === targetDate);
-
-  const scoped = scopedHostels(caller);
-
-  if (scoped) {
-    if (scoped.length === 0) { res.json([]); return; }
-    filtered = filtered.filter(r => scoped.includes(r.hostelId || ""));
-    if (requestedHostelId && !scoped.includes(requestedHostelId)) { res.json([]); return; }
-  }
-
-  if (requestedHostelId) {
-    filtered = filtered.filter(r => r.hostelId === requestedHostelId);
-  }
-
-  res.json(filtered.map(r => ({
+  res.json(rows.map(r => ({
     ...r,
     checkInTime: r.checkInTime?.toISOString() || null,
     checkOutTime: r.checkOutTime?.toISOString() || null,

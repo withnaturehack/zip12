@@ -12,16 +12,29 @@ import {
 
 const router = Router();
 
+function isValidEmail(e: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+function sanitizeString(v: unknown, max = 200): string {
+  if (typeof v !== "string") return "";
+  return v.trim().slice(0, max);
+}
+
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = sanitizeString(req.body?.email).toLowerCase();
+    const password = sanitizeString(req.body?.password, 100);
 
     if (!email || !password) {
       return res.status(400).json({ error: "Bad Request", message: "Email and password required" });
     }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: "Bad Request", message: "Invalid email format" });
+    }
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email.trim().toLowerCase()));
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
 
     if (!user) {
       return res.status(401).json({ error: "Unauthorized", message: "User not found" });
@@ -71,13 +84,24 @@ router.post("/login", async (req, res) => {
 // POST /api/auth/register — sets role to "pending", no token issued
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, rollNumber } = req.body;
+    const name = sanitizeString(req.body?.name, 100);
+    const cleanEmail = sanitizeString(req.body?.email, 200).toLowerCase();
+    const password = sanitizeString(req.body?.password, 100);
+    const rollNumber = sanitizeString(req.body?.rollNumber, 50);
 
-    if (!name || !email || !password || !rollNumber) {
+    if (!name || !cleanEmail || !password || !rollNumber) {
       return res.status(400).json({ error: "Bad Request", message: "All fields required" });
     }
+    if (!isValidEmail(cleanEmail)) {
+      return res.status(400).json({ error: "Bad Request", message: "Invalid email format" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Bad Request", message: "Password must be at least 6 characters" });
+    }
+    if (name.length < 2) {
+      return res.status(400).json({ error: "Bad Request", message: "Name must be at least 2 characters" });
+    }
 
-    const cleanEmail = email.trim().toLowerCase();
     const passwordHash = await hashPassword(password);
     const id = generateId();
 

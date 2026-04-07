@@ -129,7 +129,7 @@ function AttendanceModal({
     if (!visible || !student) return;
     const timer = setInterval(() => {
       loadState({ silent: true });
-    }, 1500);
+    }, 5000);
     return () => clearInterval(timer);
   }, [visible, student, loadState]);
 
@@ -378,7 +378,7 @@ function AttendanceModal({
 
 // ─── Student Row ────────────────────────────────────────────────────────────────
 
-function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: () => void }) {
+const StudentRow = React.memo(function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: () => void }) {
   const hasCheckedIn = !!item.checkInTime;
   const hasCheckedOut = !!item.checkOutTime;
   const isCurrentlyIn = hasCheckedIn && !hasCheckedOut;
@@ -426,7 +426,7 @@ function StudentRow({ item, theme, onPress }: { item: any; theme: any; onPress: 
       </View>
     </Pressable>
   );
-}
+});
 
 // ─── Student Self View ─────────────────────────────────────────────────────────
 
@@ -670,6 +670,10 @@ export default function AttendanceTab() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         onEndReached={() => hasMore && !loading && fetchStudents()}
         onEndReachedThreshold={0.4}
+        windowSize={7}
+        maxToRenderPerBatch={15}
+        initialNumToRender={15}
+        removeClippedSubviews={true}
         renderItem={({ item }) => (
           <StudentRow
             item={item}

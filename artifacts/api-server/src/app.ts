@@ -7,12 +7,19 @@ import express, {
 import cors from "cors";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import router from "./routes/index.js";
 
 const app: Express = express();
 
 // ✅ Trust proxy (important for Replit)
 app.set("trust proxy", 1);
+
+// ✅ Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false,
+}));
 
 // ✅ Compression
 app.use(compression());
@@ -28,9 +35,9 @@ app.use(
   }),
 );
 
-// ✅ Body parsers
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+// ✅ Body parsers (512kb is plenty for a student app; 2mb was too permissive)
+app.use(express.json({ limit: "512kb" }));
+app.use(express.urlencoded({ extended: true, limit: "512kb" }));
 
 // ================= RATE LIMITERS =================
 

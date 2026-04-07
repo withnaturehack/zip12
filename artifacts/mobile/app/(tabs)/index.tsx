@@ -89,7 +89,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      qc.invalidateQueries();
+      qc.invalidateQueries({ queryKey: ["att-stats"] });
+      qc.invalidateQueries({ queryKey: ["mess-stats"] });
+      qc.invalidateQueries({ queryKey: ["announcements"] });
+      qc.invalidateQueries({ queryKey: ["my-status"] });
+      qc.invalidateQueries({ queryKey: ["pending-count"] });
     }, [qc])
   );
 
