@@ -4,7 +4,7 @@ import {
   Modal, ActivityIndicator, useColorScheme, ScrollView, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -199,6 +199,8 @@ export default function MessCardTabScreen() {
     enabled: canWork,
     refetchInterval: 8000,
     staleTime: 4000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   const rawStudents = (Array.isArray(data) ? data : data?.students || []) as any[];
@@ -329,7 +331,7 @@ export default function MessCardTabScreen() {
         ))}
       </View>
 
-      {isLoading ? (
+      {isLoading && students.length === 0 ? (
         <ActivityIndicator color={theme.tint} style={{ marginTop: 24 }} />
       ) : (
         <FlatList

@@ -568,7 +568,7 @@ export default function AttendanceTab() {
 
   const fetchStudents = useCallback(async (reset = false, silent = false) => {
     if (isStudent) return;
-    if (!canWork) { setAllStudents([]); setHasMore(false); return; }
+    if (!canWork) { setHasMore(false); return; }
     if (!hasMore && !reset) return;
     const offset = reset ? 0 : page * PAGE_SIZE;
     if (reset) { setHasMore(true); }

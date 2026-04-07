@@ -5,7 +5,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -263,6 +263,7 @@ const StudentCard = memo(function StudentCard({
 function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any; isDark: boolean }) {
   const { user, isSuperAdmin } = useAuth();
   const request = useApiRequest();
+  const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
   const topPad = (isWeb ? 67 : insets.top) + 8;
 
@@ -294,7 +295,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   const [selectedHostel, setSelectedHostel] = useState(ALL_HOSTELS);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 350);
-  const [students, setStudents] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>(() => (qc.getQueryData<any[]>(["hostel-students-cache"]) || []));
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -315,12 +316,11 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   }, [request, debouncedSearch, selectedHostel]);
 
   const load = useCallback(async (reset = false) => {
-    if (!canWork) { setStudents([]); setHasMore(false); return; }
+    if (!canWork) { setHasMore(false); return; }
     if (loadingRef.current && !reset) return;
     loadingRef.current = true;
     if (reset) {
       setLoading(true);
-      setStudents([]);
       offsetRef.current = 0;
       setHasMore(true);
     } else {
@@ -328,7 +328,11 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
     }
     try {
       const { list, total: tot } = await doFetch(offsetRef.current);
-      setStudents(prev => reset ? list : [...prev, ...list]);
+      setStudents(prev => {
+        const next = reset ? list : [...prev, ...list];
+        if (reset) qc.setQueryData(["hostel-students-cache"], next);
+        return next;
+      });
       setTotal(tot);
       offsetRef.current = (reset ? 0 : offsetRef.current) + list.length;
       setHasMore(offsetRef.current < tot);
@@ -336,7 +340,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
     loadingRef.current = false;
     setLoading(false);
     setLoadingMore(false);
-  }, [doFetch, canWork]);
+  }, [doFetch, canWork, qc]);
 
   // Reload when shift becomes active, or filter/search changes
   useEffect(() => { load(true); }, [debouncedSearch, selectedHostel, canWork]);
@@ -427,7 +431,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
       </View>
 
       {/* List */}
-      {loading ? (
+      {loading && students.length === 0 ? (
         <View style={{ padding: 16 }}>
           <CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton />
         </View>

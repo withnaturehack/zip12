@@ -5,7 +5,7 @@ import {
   RefreshControl, FlatList, Linking, ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -158,6 +158,8 @@ export default function StaffStatusScreen() {
     enabled: isVolunteer,
     refetchInterval: 30000,
     staleTime: 15000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
   });
@@ -310,7 +312,7 @@ export default function StaffStatusScreen() {
           </>
         )}
         ListEmptyComponent={() =>
-          isLoading ? <ActivityIndicator color={theme.tint} style={{ marginTop: 40 }} /> : null
+          isLoading && (allStaff as any[]).length === 0 ? <ActivityIndicator color={theme.tint} style={{ marginTop: 40 }} /> : null
         }
         renderItem={({ item }) => {
           const roleColor = ROLE_COLORS[item.role] || "#6366f1";

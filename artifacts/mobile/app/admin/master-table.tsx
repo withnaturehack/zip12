@@ -5,7 +5,7 @@ import {
   ActivityIndicator, TextInput, Alert, Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -344,7 +344,9 @@ export default function MasterTableScreen() {
     queryKey: ["master-students"],
     queryFn: loadAllStudents,
     staleTime: 30000,
+    gcTime: 10 * 60 * 1000,
     refetchInterval: 30000,
+    placeholderData: keepPreviousData,
   });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -572,7 +574,7 @@ export default function MasterTableScreen() {
         <Text style={[styles.th, { color: theme.textSecondary, width: 88, textAlign: "center" }]}>STATUS</Text>
       </View>
 
-      {isLoading ? (
+      {isLoading && (students as any[]).length === 0 ? (
         <View style={{ padding: 16 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
       ) : (
         <FlatList
