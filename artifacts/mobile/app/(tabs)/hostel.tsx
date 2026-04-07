@@ -49,6 +49,7 @@ const StudentDetailModal = memo(function StudentDetailModal({
   student: any; visible: boolean; onClose: () => void; theme: any;
 }) {
   const request = useApiRequest();
+  const modalInsets = useSafeAreaInsets();
 
   const { data: history = [], isLoading: histLoading } = useQuery<any[]>({
     queryKey: ["student-history", student?.id],
@@ -67,8 +68,9 @@ const StudentDetailModal = memo(function StudentDetailModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === "ios" ? "pageSheet" : "overFullScreen"} onRequestClose={onClose}>
       <View style={[sd.container, { backgroundColor: theme.background }]}>
+        <View style={sd.dragHandle} />
         {/* Profile header */}
-        <View style={[sd.profileHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        <View style={[sd.profileHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
           <View style={[sd.avatar, { backgroundColor: theme.tint + "25" }]}>
             <Text style={[sd.avatarText, { color: theme.tint }]}>{initial}</Text>
           </View>
@@ -92,7 +94,7 @@ const StudentDetailModal = memo(function StudentDetailModal({
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 12 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: Math.max(modalInsets.bottom + 24, 40), gap: 12 }}
         >
           {/* Today's Attendance */}
           <Section title="TODAY'S ATTENDANCE" icon="clock" theme={theme}>
@@ -744,7 +746,8 @@ export default function HostelTab() {
 // ─── Student Detail Styles ─────────────────────────────────────────────────────
 const sd = StyleSheet.create({
   container: { flex: 1 },
-  profileHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 20, borderBottomWidth: 1 },
+  dragHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#94a3b830", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  profileHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   avatar: { width: 54, height: 54, borderRadius: 27, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 22, fontFamily: "Inter_700Bold" },
   name: { fontSize: 17, fontFamily: "Inter_700Bold" },

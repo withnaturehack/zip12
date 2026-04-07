@@ -102,6 +102,7 @@ function AttendanceModal({
   request: any;
   onDataChanged: (studentId: string, patch: Partial<Student>) => void;
 }) {
+  const modalInsets = useSafeAreaInsets();
   const [state, setState] = useState<CheckinState | null>(null);
   const [loadingState, setLoadingState] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -217,8 +218,10 @@ function AttendanceModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.modalContainer, { backgroundColor: theme.background }]}>
+        {/* Drag handle */}
+        <View style={styles.dragHandle} />
         {/* Header */}
-        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
           <View style={[styles.modalAvatar, { backgroundColor: theme.tint + "20" }]}>
             <Text style={[styles.modalAvatarText, { color: theme.tint }]}>{(student.name || "?")[0].toUpperCase()}</Text>
           </View>
@@ -235,7 +238,7 @@ function AttendanceModal({
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }} showsVerticalScrollIndicator={false}>
           {loadingState ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
               <ActivityIndicator color={theme.tint} size="large" />
@@ -749,7 +752,8 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
   // Modal
   modalContainer: { flex: 1 },
-  modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 20, borderBottomWidth: 1 },
+  dragHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#94a3b830", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   modalAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   modalAvatarText: { fontSize: 18, fontFamily: "Inter_700Bold" },
   modalName: { fontSize: 17, fontFamily: "Inter_700Bold" },

@@ -35,6 +35,7 @@ function StudentProfileModal({ visible, studentId, onClose, theme, request }: {
   theme: any;
   request: any;
 }) {
+  const modalInsets = useSafeAreaInsets();
   const { data: student, isLoading: studentLoading, refetch: refetchStudent } = useQuery<any>({
     queryKey: ["student-profile", studentId],
     queryFn: () => request(`/students/${studentId}`),
@@ -58,8 +59,9 @@ function StudentProfileModal({ visible, studentId, onClose, theme, request }: {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[styles.modal, { backgroundColor: theme.background }]}> 
-        <View style={[styles.modalHeader, { borderColor: theme.border }]}>
+      <View style={[styles.modal, { backgroundColor: theme.background }]}>
+        <View style={styles.dragHandle} />
+        <View style={[styles.modalHeader, { borderColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
           <Text style={[styles.modalTitle, { color: theme.text }]}>Student Profile</Text>
           <Pressable onPress={onClose} hitSlop={8}>
             <Feather name="x" size={24} color={theme.text} />
@@ -72,7 +74,7 @@ function StudentProfileModal({ visible, studentId, onClose, theme, request }: {
           <FlatList
             data={[{ key: "content" }]}
             keyExtractor={(i) => i.key}
-            contentContainerStyle={{ padding: 20, paddingBottom: 70 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }}
             refreshControl={<RefreshControl refreshing={false} onRefresh={() => { refetchStudent(); refetchInventory(); refetchCheckins(); }} tintColor={theme.tint} />}
             renderItem={() => {
               const s = student || {};
@@ -463,7 +465,8 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   modal: { flex: 1 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1 },
+  dragHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#94a3b830", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
   modalBody: { padding: 20, gap: 4, paddingBottom: 60 },
   fieldLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginTop: 12, marginBottom: 6 },

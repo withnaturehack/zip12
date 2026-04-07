@@ -254,6 +254,7 @@ function AssignStaffModal({ hostel, visible, onClose, theme, request, queryClien
 function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAdmin, queryClient }: {
   hostel: any; visible: boolean; onClose: () => void; theme: any; request: any; isSuperAdmin: boolean; queryClient: any;
 }) {
+  const modalInsets = useSafeAreaInsets();
   const [searchQ, setSearchQ] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showAssignStaff, setShowAssignStaff] = useState(false);
@@ -377,8 +378,9 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
   return (
     <Modal visible={visible} animationType="slide" presentationStyle={Platform.OS === "ios" ? "pageSheet" : "overFullScreen"} onRequestClose={onClose}>
       <View style={[styles.detailModal, { backgroundColor: theme.background }]}>
+        <View style={styles.dragHandle} />
         {/* Header */}
-        <View style={[styles.detailHeader, { borderBottomColor: theme.border }]}>
+        <View style={[styles.detailHeader, { borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.detailTitle, { color: theme.text }]}>{hostel.name}</Text>
             {hostel.location ? <Text style={[styles.detailSub, { color: theme.textSecondary }]}>{hostel.location}</Text> : null}
@@ -396,7 +398,7 @@ function HostelDetailModal({ hostel, visible, onClose, theme, request, isSuperAd
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }} showsVerticalScrollIndicator={false}>
           {/* Info Cards */}
           <View style={styles.infoGrid}>
             {[
@@ -956,7 +958,8 @@ const styles = StyleSheet.create({
   submitBtn: { borderRadius: 12, paddingVertical: 15, alignItems: "center", marginTop: 20 },
   submitText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   detailModal: { flex: 1 },
-  detailHeader: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  dragHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#94a3b830", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  detailHeader: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   detailTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
   detailSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   closeX: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },

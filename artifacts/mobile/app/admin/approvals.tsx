@@ -39,6 +39,7 @@ function ApproveModal({
   request: any;
   qc: any;
 }) {
+  const modalInsets = useSafeAreaInsets();
   const [selectedRole, setSelectedRole] = useState<RoleOption>("student");
   const [selectedHostelId, setSelectedHostelId] = useState("");
   const [approving, setApproving] = useState(false);
@@ -76,13 +77,14 @@ function ApproveModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.modalContainer, { backgroundColor: theme.background }]}>
-        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+        <View style={styles.dragHandle} />
+        <View style={[styles.modalHeader, { borderBottomColor: theme.border, paddingTop: modalInsets.top + 20 }]}>
           <Text style={[styles.modalTitle, { color: theme.text }]}>Approve User</Text>
           <Pressable onPress={onClose} hitSlop={12}>
             <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Math.max(modalInsets.bottom + 24, 40) }}>
           {/* User Info */}
           <View style={[styles.userCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={[styles.userAvatar, { backgroundColor: theme.tint + "20" }]}>
@@ -319,7 +321,8 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   // Modal
   modalContainer: { flex: 1 },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1 },
+  dragHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#94a3b830", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
   userCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 20 },
   fieldLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 10 },
