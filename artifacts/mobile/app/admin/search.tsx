@@ -101,7 +101,7 @@ export default function SearchScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
 
   const [query, setQuery] = useState("");
@@ -257,7 +257,7 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  header: { paddingHorizontal: 16, paddingBottom: 20, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", gap: 14 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular" },

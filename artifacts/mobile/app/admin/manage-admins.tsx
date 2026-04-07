@@ -671,7 +671,7 @@ function AssignHostelForm({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1 },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_700Bold", textAlign: "center" },
   addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },

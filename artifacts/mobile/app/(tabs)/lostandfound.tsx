@@ -533,7 +533,7 @@ export default function AttendanceTab() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
 
   const { user, isStudent, isCoordinator, isSuperAdmin, isVolunteer } = useAuth();
   const request = useApiRequest();
@@ -732,7 +732,7 @@ export default function AttendanceTab() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  pageHeader: { paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  pageHeader: { paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, gap: 16 },
   pageTitle: { fontSize: 26, fontFamily: "Inter_700Bold" },
   pageSubtitle: { fontSize: 13, fontFamily: "Inter_400Regular" },
   countBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },

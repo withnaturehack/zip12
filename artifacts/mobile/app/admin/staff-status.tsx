@@ -126,7 +126,7 @@ export default function StaffStatusScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
   const qc = useQueryClient();
   const { user, isSuperAdmin, isCoordinator, isVolunteer } = useAuth();
@@ -415,7 +415,7 @@ export default function StaffStatusScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 10 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 20, borderBottomWidth: 1, gap: 14 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title: { flex: 1, fontSize: 20, fontFamily: "Inter_700Bold" },
   refreshBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },

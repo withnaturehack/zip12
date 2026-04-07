@@ -437,7 +437,7 @@ function MetricCard({ label, value, color }: { label: string; value: string; col
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 18, paddingBottom: 12, borderBottomWidth: 1 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 18, paddingBottom: 20, borderBottomWidth: 1 },
   title: { fontSize: 24, fontFamily: "Inter_700Bold" },
   sub: { marginTop: 2, fontSize: 13, fontFamily: "Inter_400Regular" },
   liveChip: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },

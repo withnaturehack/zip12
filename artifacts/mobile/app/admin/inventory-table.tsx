@@ -209,7 +209,7 @@ export default function InventoryTableScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const isCompact = !isWeb && width < 430;
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
   const { isVolunteer, isSuperAdmin } = useAuth();
   const qc = useQueryClient();

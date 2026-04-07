@@ -267,7 +267,7 @@ function StaffStudentsView({ theme, insets, isDark }: { theme: any; insets: any;
   const request = useApiRequest();
   const qc = useQueryClient();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
 
   // ─── Shift requirement ───────────────────────────────────────────────────────
   const requiresShift = !isSuperAdmin;
@@ -570,7 +570,7 @@ function StudentHostelView({ theme, insets }: { theme: any; insets: any }) {
   const { user } = useAuth();
   const request = useApiRequest();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: hostel, isLoading, refetch: refetchHostel } = useQuery<any>({
@@ -786,7 +786,7 @@ const sc = StyleSheet.create({
 
 // ─── Staff View Styles ─────────────────────────────────────────────────────────
 const stf = StyleSheet.create({
-  header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 10 },
+  header: { paddingHorizontal: 16, paddingBottom: 20, borderBottomWidth: 1, gap: 10 },
   headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { fontSize: 26, fontFamily: "Inter_700Bold" },
   hostelSubtitle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: -6 },

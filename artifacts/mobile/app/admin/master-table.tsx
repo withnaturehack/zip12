@@ -305,7 +305,7 @@ export default function MasterTableScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
   const { user } = useAuth();
 
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", paddingHorizontal: 16,
-    paddingBottom: 12, borderBottomWidth: 1, gap: 10,
+    paddingBottom: 20, borderBottomWidth: 1, gap: 10,
   },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontFamily: "Inter_700Bold" },
@@ -746,7 +746,7 @@ const sd = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "#00000080", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 0, maxHeight: "92%" },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 16 },
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 14, borderBottomWidth: 1 },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 20, borderBottomWidth: 1 },
   avatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 22, fontFamily: "Inter_700Bold" },
   name: { fontSize: 17, fontFamily: "Inter_700Bold" },

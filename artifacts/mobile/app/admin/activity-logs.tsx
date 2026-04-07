@@ -231,7 +231,7 @@ export default function ActivityLogsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
   const { token } = useAuth();
   const [filter, setFilter] = useState("all");
@@ -405,7 +405,7 @@ export default function ActivityLogsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 20, borderBottomWidth: 1, gap: 14 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontFamily: "Inter_700Bold" },
   subtitle: { fontSize: 11, fontFamily: "Inter_400Regular" },

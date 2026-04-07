@@ -172,7 +172,7 @@ export default function ApprovalsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
-  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 16, 80);
+  const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
   const qc = useQueryClient();
   const { isSuperAdmin } = useAuth();
@@ -303,7 +303,7 @@ export default function ApprovalsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1 },
   title: { fontSize: 26, fontFamily: "Inter_700Bold", flex: 1 },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   badgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold" },
