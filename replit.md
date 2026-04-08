@@ -149,6 +149,12 @@ workspace/
 9. **CSV Import** — SuperAdmin can bulk-import students, mess allocation, hostel assignments; download templates.
 10. **PDF Export** — Server-side pdfkit PDFs for students, attendance, activity logs, full report.
 
+## Replit Migration Notes
+
+- **expo-router@6 / @expo/router-server@55 shim**: `expo@55` pulls in `@expo/router-server@55.0.11` which requires `expo-router/internal/routing` and `expo-router/internal/testing` — both missing from `expo-router@6.0.x`. A `postinstall` script at `scripts/patch-expo-router.js` creates these shims automatically after `pnpm install`.
+- **Database**: Uses Supabase (`SUPABASE_DATABASE_URL`), `DATABASE_URL` secret also set as fallback.
+- **CI mode**: Mobile runs with `CI=1` so Metro disables watch mode (required for Replit).
+
 ## Deployed URLs
 
 - **API Server (Production):** `https://zip-12--vpahaddevbhoomi.replit.app/api`
