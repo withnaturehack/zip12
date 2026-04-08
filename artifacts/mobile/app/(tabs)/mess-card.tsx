@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from "react";
 import {
   View, Text, FlatList, Pressable, StyleSheet, TextInput,
-  Modal, ActivityIndicator, useColorScheme, ScrollView, Linking,
+  Modal, ActivityIndicator, useColorScheme, ScrollView, Platform,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
@@ -21,16 +21,6 @@ function fmt(ts?: string | null) {
   });
 }
 
-function InfoRow({ icon, label, value, theme, accent }: { icon: any; label: string; value: string; theme: any; accent?: string }) {
-  return (
-    <View style={sd.infoRow}>
-      <Feather name={icon} size={13} color={accent || theme.textTertiary} />
-      <Text style={[sd.infoLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[sd.infoVal, { color: accent || theme.text }]} numberOfLines={2}>{value}</Text>
-    </View>
-  );
-}
-
 // ─── Enhanced Student Detail Sheet ────────────────────────────────────────────
 function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onConfirm, isPending, theme, isDark }: {
   selected: any; selectedDetails: any; visible: boolean; onClose: () => void;
@@ -39,10 +29,8 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
   if (!selected) return null;
   const d = selectedDetails || selected;
   const hasPass = !!selected.messCard;
-  const phone = d.mobileNumber || d.contactNumber || d.phone || "";
-  const emergency = d.emergencyContact || "";
   const hostel = d.hostelName || d.allottedHostel || d.hostelId || "";
-  const mess = d.allottedMess || d.assignedMess || "";
+  const mess = d.allottedMess || d.assignedMess || d.messName || "Not Assigned";
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -61,7 +49,7 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
               <View style={{ flex: 1 }}>
                 <Text style={[sd.name, { color: theme.text }]}>{selected.name}</Text>
                 <Text style={[sd.roll, { color: theme.textSecondary }]}>
-                  {d.rollNumber || d.email || ""}
+                  {d.email || ""}
                 </Text>
                 {!!hostel && (
                   <Text style={[sd.hostel, { color: theme.textTertiary }]}>
@@ -74,18 +62,18 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
               </Pressable>
             </View>
 
-            {/* Room + Mess chips */}
+            {/* Prominent Mess Name */}
+            <View style={[sd.messHero, { backgroundColor: "#f59e0b12", borderColor: "#f59e0b40" }]}>
+              <Text style={[sd.messHeroLabel, { color: theme.textSecondary }]}>MESS NAME</Text>
+              <Text style={sd.messHeroValue}>{mess}</Text>
+            </View>
+
+            {/* Room chips */}
             <View style={sd.chips}>
               {!!(d.roomNumber) && (
                 <View style={[sd.chip, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
                   <Feather name="layers" size={11} color={theme.tint} />
                   <Text style={[sd.chipText, { color: theme.tint }]}>Room {d.roomNumber}</Text>
-                </View>
-              )}
-              {!!mess && (
-                <View style={[sd.chip, { backgroundColor: "#f59e0b15", borderColor: "#f59e0b40" }]}>
-                  <Feather name="coffee" size={11} color="#f59e0b" />
-                  <Text style={[sd.chipText, { color: "#f59e0b" }]}>{mess}</Text>
                 </View>
               )}
               {!!d.gender && (
@@ -100,14 +88,6 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
                 </View>
               )}
             </View>
-
-            {/* Contact info */}
-            {(phone || emergency) && (
-              <View style={[sd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                {!!phone && <InfoRow icon="phone" label="Mobile" value={phone} theme={theme} accent="#3b82f6" />}
-                {!!emergency && <InfoRow icon="alert-circle" label="Emergency" value={emergency} theme={theme} accent="#ef4444" />}
-              </View>
-            )}
 
             {/* Mess pass status */}
             <View style={[sd.statusBox, {
@@ -126,17 +106,6 @@ function StudentDetailSheet({ selected, selectedDetails, visible, onClose, onCon
                 )}
               </View>
             </View>
-
-            {/* Call button */}
-            {!!phone && (
-              <Pressable
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); Linking.openURL(`tel:${phone}`); }}
-                style={[sd.callBtn, { borderColor: theme.tint + "50" }]}
-              >
-                <Feather name="phone-call" size={15} color={theme.tint} />
-                <Text style={[sd.callBtnText, { color: theme.tint }]}>Call {phone}</Text>
-              </Pressable>
-            )}
 
             {/* Confirm / Revoke */}
             <Pressable
@@ -169,13 +138,16 @@ export default function MessCardTabScreen() {
   const { isVolunteer, isSuperAdmin, user } = useAuth();
   const qc = useQueryClient();
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchNonce, setSearchNonce] = useState(0);
   const [filter, setFilter] = useState<"all" | "given" | "pending">("all");
   const [selected, setSelected] = useState<any | null>(null);
   const [selectedDetails, setSelectedDetails] = useState<any | null>(null);
   const [open, setOpen] = useState(false);
   const [activating, setActivating] = useState(false);
   const requiresShift = isVolunteer && !isSuperAdmin;
+  const hasSearchQuery = searchQuery.trim().length > 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -194,9 +166,9 @@ export default function MessCardTabScreen() {
   const canWork = !requiresShift || !!myStatus?.isActive;
 
   const { data, isLoading } = useQuery<any>({
-    queryKey: ["mess-card-students", search],
-    queryFn: () => request(`/students?limit=300&offset=0${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ""}`),
-    enabled: canWork,
+    queryKey: ["mess-card-students", searchQuery, searchNonce],
+    queryFn: () => request(`/students?limit=300&offset=0${searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : ""}`),
+    enabled: canWork && hasSearchQuery,
     refetchInterval: 8000,
     staleTime: 4000,
     gcTime: 10 * 60 * 1000,
@@ -264,6 +236,11 @@ export default function MessCardTabScreen() {
     } finally { setActivating(false); }
   }
 
+  function submitSearch() {
+    setSearchQuery(searchInput.trim());
+    setSearchNonce((n) => n + 1);
+  }
+
   return (
     <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { paddingTop: 16, borderBottomColor: theme.border }]}>
@@ -290,20 +267,33 @@ export default function MessCardTabScreen() {
       <View style={[styles.searchWrap, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <Feather name="search" size={15} color={theme.textSecondary} />
         <TextInput
-          value={search}
-          onChangeText={setSearch}
+          value={searchInput}
+          onChangeText={setSearchInput}
           placeholder="Search by name, roll, room…"
           placeholderTextColor={theme.textTertiary}
           style={[styles.searchInput, { color: theme.text }]}
           returnKeyType="search"
+          onSubmitEditing={submitSearch}
           autoCorrect={false}
         />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")} hitSlop={8}>
+        {searchInput.length > 0 && (
+          <Pressable onPress={() => { setSearchInput(""); setSearchQuery(""); setSearchNonce((n) => n + 1); }} hitSlop={8}>
             <Feather name="x" size={15} color={theme.textSecondary} />
           </Pressable>
         )}
+        <Pressable
+          onPress={submitSearch}
+          style={{ backgroundColor: theme.tint + "20", borderWidth: 1, borderColor: theme.tint + "55", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+        >
+          <Text style={{ color: theme.tint, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Search</Text>
+        </Pressable>
       </View>
+
+      {!hasSearchQuery && (
+        <Text style={{ color: theme.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular", paddingHorizontal: 16, paddingBottom: 6 }}>
+          Enter name, roll or room and press Search.
+        </Text>
+      )}
 
       {/* Filter tabs */}
       <View style={[styles.filterRow, { borderBottomColor: theme.border }]}>
@@ -351,9 +341,12 @@ export default function MessCardTabScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
-                <Text style={[styles.meta, { color: theme.textSecondary }]} numberOfLines={1}>
-                  {item.rollNumber || item.email}{item.roomNumber ? ` · Room ${item.roomNumber}` : ""}
+                <Text style={[styles.meta, { color: theme.textSecondary }]}>
+                  {item.email || "—"}
                 </Text>
+                {!!item.roomNumber && (
+                  <Text style={[styles.meta, { color: theme.textSecondary }]}>Room {item.roomNumber}</Text>
+                )}
                 {item.messCard ? (
                   <Text style={[styles.meta, { color: "#22c55e" }]} numberOfLines={1}>
                     Given {item.messCardGivenAt ? `· ${fmt(item.messCardGivenAt)}` : ""}
@@ -479,18 +472,15 @@ const sd = StyleSheet.create({
   roll: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   hostel: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   closeX: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  messHero: { borderWidth: 1, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 10 },
+  messHeroLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 4 },
+  messHeroValue: { fontSize: 24, lineHeight: 28, fontFamily: "Inter_800ExtraBold", color: "#f59e0b" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
   chip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
   chipText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  infoCard: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5 },
-  infoLabel: { fontSize: 12, fontFamily: "Inter_400Regular", width: 70 },
-  infoVal: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "right" },
   statusBox: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 },
   statusLabel: { fontSize: 13, fontFamily: "Inter_700Bold" },
   statusSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
-  callBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 12, paddingVertical: 11, marginBottom: 10 },
-  callBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   confirmBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 14, marginBottom: 4 },
   confirmText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
 });

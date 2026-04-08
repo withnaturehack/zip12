@@ -12,11 +12,21 @@ function isOnline(lastActiveAt: Date | null): boolean {
   return Date.now() - new Date(lastActiveAt).getTime() < ACTIVE_THRESHOLD_MS;
 }
 
+function parseAssignedHostelIds(raw?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function scopedHostelIdsForCaller(caller: { role: string; hostelId?: string | null; assignedHostelIds?: string | null }) {
   if (caller.role === "superadmin") return null as string[] | null;
   if (caller.role === "volunteer") return caller.hostelId ? [caller.hostelId] : [];
-  const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-  return Array.from(new Set([...assigned, caller.hostelId || ""].filter(Boolean)));
+  const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+  if (assigned.length > 0) return Array.from(new Set(assigned));
+  return caller.hostelId ? [caller.hostelId] : [];
 }
 
 // POST /api/staff/go-active — volunteer/staff marks themselves active

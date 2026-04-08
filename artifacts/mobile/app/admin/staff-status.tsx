@@ -12,6 +12,8 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 
+const LIVE_REFRESH_MS = 5000;
+
 const ROLE_COLORS: Record<string, string> = {
   volunteer: "#22c55e",
   coordinator: "#3b82f6",
@@ -20,7 +22,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 const ROLE_LABELS: Record<string, string> = {
   volunteer: "Volunteer",
-  coordinator: "Coordinator",
+  coordinator: "Admin",
   admin: "Admin",
   superadmin: "Super Admin",
 };
@@ -47,62 +49,67 @@ function StaffDetailModal({ staff, visible, onClose, theme }: { staff: any; visi
       <Pressable style={sd.overlay} onPress={onClose}>
         <Pressable style={[sd.sheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
           <View style={sd.handle} />
-
-          {/* Avatar */}
-          <View style={[sd.avatar, { backgroundColor: roleColor + "20" }]}>
-            <Text style={[sd.avatarText, { color: roleColor }]}>
-              {(staff.name || "?")[0].toUpperCase()}
-            </Text>
-          </View>
-          <Text style={[sd.staffName, { color: theme.text }]}>{staff.name}</Text>
-          <Text style={[sd.staffEmail, { color: theme.textSecondary }]}>{staff.email}</Text>
-
-          {/* Role + Status chips */}
-          <View style={sd.chips}>
-            <View style={[sd.chip, { backgroundColor: roleColor + "15", borderColor: roleColor + "40" }]}>
-              <Text style={[sd.chipText, { color: roleColor }]}>{ROLE_LABELS[staff.role] || staff.role}</Text>
-            </View>
-            <View style={[sd.chip, {
-              backgroundColor: staff.isOnline ? "#22c55e15" : "#6b728015",
-              borderColor: staff.isOnline ? "#22c55e40" : "#6b728040",
-            }]}>
-              <View style={[sd.dot, { backgroundColor: staff.isOnline ? "#22c55e" : "#6b7280" }]} />
-              <Text style={[sd.chipText, { color: staff.isOnline ? "#22c55e" : "#6b7280" }]}>
-                {staff.isOnline ? "Online" : "Offline"}
+          <ScrollView
+            style={sd.scrollArea}
+            contentContainerStyle={sd.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Avatar */}
+            <View style={[sd.avatar, { backgroundColor: roleColor + "20" }]}>
+              <Text style={[sd.avatarText, { color: roleColor }]}>
+                {(staff.name || "?")[0].toUpperCase()}
               </Text>
             </View>
-          </View>
+            <Text style={[sd.staffName, { color: theme.text }]}>{staff.name}</Text>
+            <Text style={[sd.staffEmail, { color: theme.textSecondary }]}>{staff.email}</Text>
 
-          {/* Info list */}
-          <View style={[sd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <InfoRow icon="clock" label="Last Seen" value={timeAgo(staff.lastActiveAt)} theme={theme} />
-            {!!(staff.hostelName || staff.hostelId) && (
-              <InfoRow icon="home" label="Hostel" value={staff.hostelName || staff.hostelId} theme={theme} />
+            {/* Role + Status chips */}
+            <View style={sd.chips}>
+              <View style={[sd.chip, { backgroundColor: roleColor + "15", borderColor: roleColor + "40" }]}>
+                <Text style={[sd.chipText, { color: roleColor }]}>{ROLE_LABELS[staff.role] || staff.role}</Text>
+              </View>
+              <View style={[sd.chip, {
+                backgroundColor: staff.isOnline ? "#22c55e15" : "#6b728015",
+                borderColor: staff.isOnline ? "#22c55e40" : "#6b728040",
+              }]}>
+                <View style={[sd.dot, { backgroundColor: staff.isOnline ? "#22c55e" : "#6b7280" }]} />
+                <Text style={[sd.chipText, { color: staff.isOnline ? "#22c55e" : "#6b7280" }]}>
+                  {staff.isOnline ? "Online" : "Offline"}
+                </Text>
+              </View>
+            </View>
+
+            {/* Info list */}
+            <View style={[sd.infoCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <InfoRow icon="clock" label="Last Seen" value={timeAgo(staff.lastActiveAt)} theme={theme} />
+              {!!(staff.hostelName || staff.hostelId) && (
+                <InfoRow icon="home" label="Hostel" value={staff.hostelName || staff.hostelId} theme={theme} />
+              )}
+              {!!staff.area && <InfoRow icon="map-pin" label="Area" value={staff.area} theme={theme} />}
+              {!!phone && <InfoRow icon="phone" label="Phone" value={phone} theme={theme} />}
+            </View>
+
+            {/* Call button */}
+            {!!phone && (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  Linking.openURL(`tel:${phone}`);
+                }}
+                style={sd.callBtn}
+              >
+                <Feather name="phone-call" size={16} color="#fff" />
+                <Text style={sd.callBtnText}>Call {phone}</Text>
+              </Pressable>
             )}
-            {!!staff.area && <InfoRow icon="map-pin" label="Area" value={staff.area} theme={theme} />}
-            {!!phone && <InfoRow icon="phone" label="Phone" value={phone} theme={theme} />}
-          </View>
 
-          {/* Call button */}
-          {!!phone && (
             <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                Linking.openURL(`tel:${phone}`);
-              }}
-              style={sd.callBtn}
+              onPress={onClose}
+              style={[sd.closeBtn, { backgroundColor: theme.background, borderColor: theme.border }]}
             >
-              <Feather name="phone-call" size={16} color="#fff" />
-              <Text style={sd.callBtnText}>Call {phone}</Text>
+              <Text style={[sd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
             </Pressable>
-          )}
-
-          <Pressable
-            onPress={onClose}
-            style={[sd.closeBtn, { backgroundColor: theme.background, borderColor: theme.border }]}
-          >
-            <Text style={[sd.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
-          </Pressable>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -137,6 +144,8 @@ export default function StaffStatusScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [staffFilter, setStaffFilter] = useState<"all" | "online" | "offline">("all");
   const [now, setNow] = useState(Date.now());
 
   // Live clock — updates every 10 seconds for "last seen" freshness
@@ -148,19 +157,25 @@ export default function StaffStatusScreen() {
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
     queryFn: () => request("/staff/me-status"),
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: LIVE_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: "always",
+    staleTime: 1000,
   });
 
   const { data: allStaff = [], isLoading, refetch: refetchAll } = useQuery<any[]>({
     queryKey: ["staff-all"],
     queryFn: () => request("/staff/all"),
     enabled: isVolunteer,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: LIVE_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     refetchOnMount: "always",
   });
 
@@ -184,6 +199,7 @@ export default function StaffStatusScreen() {
       await request(endpoint, { method: "POST", body: JSON.stringify({ remark }) });
       qc.invalidateQueries({ queryKey: ["my-status"] });
       qc.invalidateQueries({ queryKey: ["staff-all"] });
+      await Promise.all([refetchStatus(), refetchAll()]);
       setRemarkModal(false);
     } catch { }
     setSubmitting(false);
@@ -218,6 +234,19 @@ export default function StaffStatusScreen() {
 
   const onlineCount = volunteerStaff.filter((s: any) => s.isOnline).length;
   const totalStaff = volunteerStaff.length;
+  const filteredStaff = React.useMemo(() => {
+    const q = staffSearch.trim().toLowerCase();
+    return volunteerStaff.filter((s: any) => {
+      if (staffFilter === "online" && !s.isOnline) return false;
+      if (staffFilter === "offline" && s.isOnline) return false;
+      if (!q) return true;
+      const hay = [s.name, s.email, s.hostelName, s.hostelId, s.role]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [volunteerStaff, staffSearch, staffFilter]);
 
   // suppress unused now — it's used to re-render the component every 10s
   void now;
@@ -239,7 +268,7 @@ export default function StaffStatusScreen() {
       </View>
 
       <FlatList
-        data={isVolunteer ? volunteerStaff : []}
+        data={isVolunteer ? filteredStaff : []}
         keyExtractor={s => s.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
         contentContainerStyle={{ padding: 16, paddingBottom: Platform.OS === "web" ? 80 : 90 }}
@@ -305,8 +334,48 @@ export default function StaffStatusScreen() {
                   </View>
                 </View>
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                  {isSuperAdmin ? "All Staff" : isCoordinator ? "Assigned Volunteers" : "Co-Volunteers at Your Hostel"}
+                  {isSuperAdmin ? "All Staff" : isCoordinator ? "Assigned Volunteers" : "Co-Volunteers"}
                 </Text>
+                <View style={[styles.searchBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Feather name="search" size={14} color={theme.textSecondary} />
+                  <TextInput
+                    value={staffSearch}
+                    onChangeText={setStaffSearch}
+                    placeholder="Search staff by name, email, hostel..."
+                    placeholderTextColor={theme.textTertiary}
+                    style={[styles.searchInput, { color: theme.text }]}
+                    autoCapitalize="none"
+                  />
+                  {staffSearch.length > 0 && (
+                    <Pressable onPress={() => setStaffSearch("")} hitSlop={8}>
+                      <Feather name="x" size={14} color={theme.textSecondary} />
+                    </Pressable>
+                  )}
+                </View>
+                <View style={styles.staffFilterRow}>
+                  {(["all", "online", "offline"] as const).map((f) => {
+                    const active = staffFilter === f;
+                    const color = f === "online" ? "#22c55e" : f === "offline" ? "#6b7280" : theme.tint;
+                    const count = f === "online" ? onlineCount : f === "offline" ? Math.max(totalStaff - onlineCount, 0) : totalStaff;
+                    return (
+                      <Pressable
+                        key={f}
+                        onPress={() => setStaffFilter(f)}
+                        style={[styles.staffFilterChip, {
+                          backgroundColor: active ? color + "18" : theme.surface,
+                          borderColor: active ? color : theme.border,
+                        }]}
+                      >
+                        <Text style={[styles.staffFilterText, { color: active ? color : theme.textSecondary }]}>
+                          {f === "all" ? "All" : f === "online" ? "Online" : "Offline"}
+                        </Text>
+                        <View style={[styles.staffFilterCount, { backgroundColor: active ? color + "22" : theme.border }]}>
+                          <Text style={[styles.staffFilterCountText, { color: active ? color : theme.textTertiary }]}>{count}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </>
             )}
           </>
@@ -434,6 +503,31 @@ const styles = StyleSheet.create({
   summaryNum: { fontSize: 22, fontFamily: "Inter_700Bold" },
   summaryLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   sectionTitle: { fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 10 },
+  searchBox: {
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchInput: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+  staffFilterRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  staffFilterChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  staffFilterText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  staffFilterCount: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  staffFilterCountText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   staffCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   staffAvatar: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   staffAvatarText: { fontSize: 18, fontFamily: "Inter_700Bold" },
@@ -459,7 +553,9 @@ const styles = StyleSheet.create({
 // ─── StaffDetailModal Styles ───────────────────────────────────────────────────
 const sd = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36, gap: 6, alignItems: "center" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 16, maxHeight: "90%" },
+  scrollArea: { width: "100%" },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 36, gap: 6, alignItems: "center" },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", marginBottom: 12 },
   avatar: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 8 },
   avatarText: { fontSize: 28, fontFamily: "Inter_700Bold" },

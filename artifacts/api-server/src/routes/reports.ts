@@ -18,6 +18,15 @@ import {
 
 const router = Router();
 
+function parseAssignedHostelIds(raw?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 // GET /api/reports/summary
 router.get("/summary", requireAdmin, async (req: AuthRequest, res) => {
   const [caller] = await db.select({
@@ -33,10 +42,12 @@ router.get("/summary", requireAdmin, async (req: AuthRequest, res) => {
 
   const scopedHostelIds = caller.role === "superadmin"
     ? null
-    : Array.from(new Set([
-      ...(JSON.parse(caller.assignedHostelIds || "[]") as string[]),
-      caller.hostelId || "",
-    ].filter(Boolean)));
+    : (() => {
+      const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+      return assigned.length > 0
+        ? Array.from(new Set(assigned))
+        : (caller.hostelId ? [caller.hostelId] : []);
+    })();
 
   if (scopedHostelIds && scopedHostelIds.length === 0) {
     res.json({
@@ -196,7 +207,7 @@ router.delete("/admin-users/:id", requireSuperAdmin, async (req, res) => {
 
 // PATCH /api/admin/assign-hostel/:id — assign hostel(s) to a staff member
 router.patch("/assign-hostel/:id", requireSuperAdmin, async (req: AuthRequest, res) => {
-  const { hostelId, assignedHostelIds } = req.body;
+  const { hostelId, assignedHostelIds, area } = req.body;
   const [before] = await db.select({
     id: usersTable.id,
     name: usersTable.name,
@@ -216,6 +227,7 @@ router.patch("/assign-hostel/:id", requireSuperAdmin, async (req: AuthRequest, r
   if (assignedHostelIds !== undefined) {
     updates.assignedHostelIds = JSON.stringify(Array.isArray(assignedHostelIds) ? assignedHostelIds : []);
   }
+  if (area !== undefined) updates.area = area || null;
 
   // Volunteers are single-hostel operationally; keep history trail in assignedHostelIds list.
   if (before.role === "volunteer" && hostelId !== undefined) {
@@ -241,6 +253,7 @@ router.patch("/assign-hostel/:id", requireSuperAdmin, async (req: AuthRequest, r
       to: {
         hostelId: user.hostelId,
         assignedHostelIds: JSON.parse(user.assignedHostelIds || "[]"),
+        area: user.area,
       },
       changedAt: new Date().toISOString(),
     }),
@@ -250,6 +263,7 @@ router.patch("/assign-hostel/:id", requireSuperAdmin, async (req: AuthRequest, r
     id: user.id, name: user.name, role: user.role,
     hostelId: user.hostelId,
     assignedHostelIds: JSON.parse(user.assignedHostelIds || "[]"),
+    area: user.area,
   });
 });
 

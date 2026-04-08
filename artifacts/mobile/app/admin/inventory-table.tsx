@@ -13,7 +13,7 @@ import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 import { useDebounce } from "@/hooks/useDebounce";
 import * as Haptics from "expo-haptics";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
@@ -243,14 +243,14 @@ export default function InventoryTableScreen() {
   });
   const canWork = !requiresShift || !!myStatus?.isActive;
 
-  const { data = [], isLoading, dataUpdatedAt } = useQuery({
+  const { data = [], isLoading, dataUpdatedAt, refetch, isRefetching } = useQuery({
     queryKey: ["inventory-simple"],
     queryFn: async () => { try { return await request("/inventory-simple") || []; } catch { return []; } },
     enabled: canWork,
     staleTime: 20000,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: true,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
@@ -490,6 +490,8 @@ export default function InventoryTableScreen() {
             return id || roll || String(idx);
           }}
           contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 80 : 90 }}
+          refreshing={isRefetching}
+          onRefresh={() => { refetch(); }}
           removeClippedSubviews
           windowSize={11}
           initialNumToRender={20}

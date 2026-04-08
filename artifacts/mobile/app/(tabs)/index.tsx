@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
-  RefreshControl, Platform, useColorScheme, ActivityIndicator,
+  RefreshControl, Platform, useColorScheme, ActivityIndicator, Linking,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth, useApiRequest } from "@/context/AuthContext";
@@ -85,10 +84,12 @@ export default function HomeScreen() {
   const isWeb = Platform.OS === "web";
   const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const liveMeSnapshotRef = useRef<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
+      qc.invalidateQueries({ queryKey: ["auth-me-live-home"] });
       qc.invalidateQueries({ queryKey: ["att-stats"] });
       qc.invalidateQueries({ queryKey: ["mess-stats"] });
       qc.invalidateQueries({ queryKey: ["announcements"] });
@@ -97,10 +98,36 @@ export default function HomeScreen() {
     }, [qc])
   );
 
-  const isAdmin = user?.role === "admin" || user?.role === "coordinator";
+  const safe = React.useCallback(
+    (fn: () => Promise<any>, fallback: any = null) => fn().catch(() => fallback),
+    []
+  );
+
+  const { data: liveMe, refetch: refetchLiveMe } = useQuery<any>({
+    queryKey: ["auth-me-live-home"],
+    queryFn: () => safe(() => request("/auth/me"), null),
+    enabled: !isStudent,
+    refetchInterval: 5000,
+    staleTime: 2000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (liveMe && typeof liveMe === "object" && liveMe.id) {
+      liveMeSnapshotRef.current = liveMe;
+    }
+  }, [liveMe]);
+
+  const effectiveUser = (liveMe && typeof liveMe === "object" ? liveMe : null)
+    || liveMeSnapshotRef.current
+    || user;
+  const effectiveRole = effectiveUser?.role || user?.role;
+  const isAdmin = effectiveRole === "admin" || effectiveRole === "coordinator";
+
   const assignedHostelIds: string[] = React.useMemo(() => {
     try {
-      const raw: any = user?.assignedHostelIds;
+      const raw: any = effectiveUser?.assignedHostelIds;
       if (!raw) return [];
       if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
       if (typeof raw === "string") {
@@ -109,18 +136,14 @@ export default function HomeScreen() {
       }
       return [];
     } catch { return []; }
-  }, [user?.assignedHostelIds]);
+  }, [effectiveUser?.assignedHostelIds]);
 
   const scopedHostelIds = React.useMemo(() => {
     if (isSuperAdmin) return null;
-    if (user?.role === "volunteer") return [user?.hostelId].filter(Boolean) as string[];
-    return Array.from(new Set([...(assignedHostelIds || []), user?.hostelId || ""].filter(Boolean)));
-  }, [isSuperAdmin, user?.role, user?.hostelId, assignedHostelIds]);
-
-  const safe = React.useCallback(
-    (fn: () => Promise<any>, fallback: any = null) => fn().catch(() => fallback),
-    []
-  );
+    if (effectiveRole === "volunteer") return [effectiveUser?.hostelId].filter(Boolean) as string[];
+    if (assignedHostelIds.length > 0) return Array.from(new Set(assignedHostelIds));
+    return [effectiveUser?.hostelId].filter(Boolean) as string[];
+  }, [isSuperAdmin, effectiveRole, effectiveUser?.hostelId, assignedHostelIds]);
 
   const { data: announcements, refetch: refetchAnn, isLoading: annLoading } = useQuery({
     queryKey: ["announcements"],
@@ -202,6 +225,16 @@ export default function HomeScreen() {
     retry: 1,
   });
 
+  const { data: allStaff = [] } = useQuery<any[]>({
+    queryKey: ["staff-all-home"],
+    queryFn: () => safe(() => request("/staff/all"), []),
+    enabled: isVolunteer,
+    refetchInterval: 10000,
+    staleTime: 4000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  });
+
   const assignedHostels = React.useMemo(() => {
     if (!Array.isArray(allHostels)) return [];
     return (allHostels as any[]).filter((h: any) => assignedHostelIds.includes(h.id));
@@ -209,29 +242,74 @@ export default function HomeScreen() {
 
   const profileHostelText = React.useMemo(() => {
     if (isSuperAdmin) return "All hostels";
-    if (isStudent) return user?.hostelId ? `Hostel ${user.hostelId}` : "Hostel not assigned";
+    if (isStudent) return effectiveUser?.hostelId ? `Hostel ${effectiveUser.hostelId}` : "Hostel not assigned";
     if (isCoordinator) {
       if (assignedHostels.length > 0) return assignedHostels.map((h: any) => h.name).join(", ");
       if (assignedHostelIds.length > 0) return `${assignedHostelIds.length} assigned hostel(s)`;
-      if (user?.hostelId) return `Hostel ${user.hostelId}`;
+      if (effectiveUser?.hostelId) return `Hostel ${effectiveUser.hostelId}`;
       return "No hostel assigned";
     }
     if (isVolunteer) {
-      if (user?.hostelId) {
-        const own = (allHostels as any[]).find((h: any) => h.id === user.hostelId);
-        return own?.name || `Hostel ${user.hostelId}`;
+      if (effectiveUser?.hostelId) {
+        const own = (allHostels as any[]).find((h: any) => h.id === effectiveUser.hostelId);
+        return own?.name || `Hostel ${effectiveUser.hostelId}`;
       }
       return "No hostel assigned";
     }
     return "";
-  }, [isSuperAdmin, isStudent, isCoordinator, isVolunteer, assignedHostels, assignedHostelIds.length, user?.hostelId, allHostels]);
+  }, [isSuperAdmin, isStudent, isCoordinator, isVolunteer, assignedHostels, assignedHostelIds.length, effectiveUser?.hostelId, allHostels]);
 
   const volunteerHostelText = React.useMemo(() => {
     if (!isVolunteer) return "";
-    if (!user?.hostelId) return "No hostel assigned";
-    const own = (allHostels as any[]).find((h: any) => h.id === user.hostelId);
-    return own?.name || `Hostel ${user.hostelId}`;
-  }, [isVolunteer, user?.hostelId, allHostels]);
+    if (!effectiveUser?.hostelId) return "No hostel assigned";
+    const own = (allHostels as any[]).find((h: any) => h.id === effectiveUser.hostelId);
+    return own?.name || `Hostel ${effectiveUser.hostelId}`;
+  }, [isVolunteer, effectiveUser?.hostelId, allHostels]);
+
+  // Show fellow staff/volunteers according to role:
+  // - Superadmin: all staff
+  // - Admin/Coordinator: all volunteers in assignedHostelIds
+  // - Volunteer: other volunteers in their hostel
+  const fellowStaff = React.useMemo(() => {
+    // Helper: Only include staff who are currently assigned to the relevant hostel(s)
+    const isCurrentAssignment = (staff: any, hostelIds: string[]) => {
+      // Must have hostelId and assignedHostelIds matching
+      if (!staff || !staff.hostelId) return false;
+      return hostelIds.includes(String(staff.hostelId));
+    };
+    // Exclude self always
+    const excludeSelf = (s: any) => String(s.id || "") !== String(effectiveUser?.id || "");
+    // Add phone and isOnline fields
+    const enrich = (s: any) => {
+      const phone = s.contactNumber || s.phone || "";
+      const isOnline = typeof s.isOnline === "boolean"
+        ? s.isOnline
+        : (s.lastActiveAt ? (Date.now() - new Date(s.lastActiveAt).getTime()) < 10 * 60 * 1000 : false);
+      return { ...s, phone, isOnline };
+    };
+    if (isSuperAdmin) {
+      // Only show staff with a current hostel assignment
+      return (allStaff as any[])
+        .filter((s: any) => s.hostelId)
+        .filter(excludeSelf)
+        .map(enrich);
+    }
+    if (isCoordinator || effectiveRole === "admin") {
+      // Show all volunteers currently assigned to any of my assignedHostelIds
+      return (allStaff as any[])
+        .filter((s: any) => s.role === "volunteer" && isCurrentAssignment(s, assignedHostelIds))
+        .filter(excludeSelf)
+        .map(enrich);
+    }
+    if (isVolunteer && effectiveUser?.hostelId) {
+      // Show other volunteers currently assigned to my hostel
+      return (allStaff as any[])
+        .filter((s: any) => s.role === "volunteer" && String(s.hostelId || "") === String(effectiveUser.hostelId))
+        .filter(excludeSelf)
+        .map(enrich);
+    }
+    return [];
+  }, [isSuperAdmin, isCoordinator, isVolunteer, effectiveRole, effectiveUser?.hostelId, effectiveUser?.id, assignedHostelIds, allStaff]);
 
   const scopeLabel = isSuperAdmin ? "All hostels" : "Assigned hostels only";
 
@@ -277,9 +355,9 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchAnn(), refetchStats?.(), refetchStatus?.(), refetchMess?.()].filter(Boolean));
+    await Promise.all([refetchLiveMe?.(), refetchAnn(), refetchStats?.(), refetchStatus?.(), refetchMess?.()].filter(Boolean));
     setRefreshing(false);
-  }, [refetchAnn, refetchStats, refetchStatus, refetchMess]);
+  }, [refetchLiveMe, refetchAnn, refetchStats, refetchStatus, refetchMess]);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -288,14 +366,14 @@ export default function HomeScreen() {
     return "Good evening";
   };
 
-  const roleLabel = user?.role === "superadmin" ? "Super Admin"
-    : user?.role === "admin" || user?.role === "coordinator" ? "Admin"
-    : user?.role === "volunteer" ? "Volunteer"
+  const roleLabel = effectiveRole === "superadmin" ? "Super Admin"
+    : effectiveRole === "admin" || effectiveRole === "coordinator" ? "Admin"
+    : effectiveRole === "volunteer" ? "Volunteer"
     : "Student";
 
-  const roleBadge = user?.role === "superadmin" ? "purple"
-    : user?.role === "admin" || user?.role === "coordinator" ? "amber"
-    : user?.role === "volunteer" ? "blue"
+  const roleBadge = effectiveRole === "superadmin" ? "purple"
+    : effectiveRole === "admin" || effectiveRole === "coordinator" ? "amber"
+    : effectiveRole === "volunteer" ? "blue"
     : "green";
 
   const isActive = myStatus?.isActive ?? false;
@@ -316,9 +394,9 @@ export default function HomeScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[styles.greeting, { color: theme.textSecondary }]}>{greeting()}</Text>
             <Text style={[styles.heroName, { color: theme.text }]} numberOfLines={1}>
-              {user?.name?.split(" ")[0] ?? "..."}
+              {effectiveUser?.name?.split(" ")[0] ?? user?.name?.split(" ")[0] ?? "..."}
             </Text>
-            {!!profileHostelText && (
+            {!!profileHostelText && (isVolunteer || isAdmin) && (
               <Text style={[styles.heroHostel, { color: theme.textTertiary }]} numberOfLines={1}>{profileHostelText}</Text>
             )}
           </View>
@@ -378,19 +456,6 @@ export default function HomeScreen() {
             ══════════════════════════════════════════════════════════════ */}
         {isVolunteer && !isCoordinator && canWork && (
           <>
-            <SectionCard
-              icon="home"
-              iconColor={theme.tint}
-              title="Assigned Hostel"
-              sub="Your current access scope"
-              onViewAll={() => router.push("/(tabs)/hostel")}
-            >
-              <View style={{ paddingVertical: 4 }}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>{volunteerHostelText || "No hostel assigned"}</Text>
-                <Text style={[styles.cardSub, { color: theme.textSecondary }]}>Only this hostel's data is visible in your dashboard.</Text>
-              </View>
-            </SectionCard>
-
             {/* Attendance card */}
             <SectionCard
               icon="check-square"
@@ -436,6 +501,56 @@ export default function HomeScreen() {
               </Pressable>
             </SectionCard>
 
+            <SectionCard
+              icon="users"
+              iconColor="#8b5cf6"
+              title="Fellow Working Members"
+              sub={volunteerHostelText || "Same assigned hostel"}
+              onViewAll={() => router.push("/admin/staff-status")}
+            >
+              {fellowStaff.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No other staff in this hostel</Text>
+                </View>
+              ) : (
+                fellowStaff.slice(0, 5).map((s: any) => (
+                  <View key={s.id} style={[styles.fellowRow, { borderBottomColor: theme.border }]}>
+                    <View style={[styles.fellowDot, { backgroundColor: s.isOnline ? "#22c55e" : "#94a3b8" }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.fellowName, { color: theme.text }]} numberOfLines={1}>{s.name}</Text>
+                      <Text style={[styles.fellowMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+                        {(s.role || "staff").toString().toUpperCase()} · {s.isOnline ? "Online" : "Offline"}
+                      </Text>
+                    </View>
+                    <View style={styles.fellowActions}>
+                      {s.phone ? (
+                        <Pressable
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            Linking.openURL(`tel:${s.phone}`);
+                          }}
+                          style={[styles.fellowBtn, { backgroundColor: "#22c55e15" }]}
+                          hitSlop={8}
+                        >
+                          <Feather name="phone-call" size={13} color="#22c55e" />
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          router.push("/admin/staff-status");
+                        }}
+                        style={[styles.fellowBtn, { backgroundColor: theme.tint + "18" }]}
+                        hitSlop={8}
+                      >
+                        <Feather name="eye" size={13} color={theme.tint} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              )}
+            </SectionCard>
+
             {/* Quick grid */}
             <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 10 }]}>
               Quick Access
@@ -454,38 +569,6 @@ export default function HomeScreen() {
             ══════════════════════════════════════════════════════════════ */}
         {isCoordinator && canWork && (
           <>
-            {/* Assigned Hostels */}
-            {isAdmin && assignedHostels.length > 0 && (
-              <View style={{ marginBottom: 4 }}>
-                <Text style={[styles.sectionLabel, { color: theme.textSecondary, paddingHorizontal: 20, marginBottom: 8 }]}>
-                  Your Hostels
-                </Text>
-                {assignedHostels.map((h: any) => (
-                  <Pressable
-                    key={h.id}
-                    onPress={() => { Haptics.selectionAsync(); router.push("/admin/hostels" as any); }}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-                  >
-                    <AnimatedCard style={[styles.card, { borderColor: theme.tint + "30", borderWidth: 1.5 }]}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <View style={[styles.cardIconBox, { backgroundColor: theme.tint + "1A" }]}>
-                          <Feather name="home" size={17} color={theme.tint} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.cardTitle, { color: theme.text }]}>{h.name}</Text>
-                          {h.location && <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{h.location}</Text>}
-                        </View>
-                        <View style={[styles.assignedPill, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "40" }]}>
-                          <Text style={[styles.assignedPillText, { color: theme.tint }]}>Assigned</Text>
-                        </View>
-                        <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-                      </View>
-                    </AnimatedCard>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
             {/* Superadmin pending approvals alert */}
             {isSuperAdmin && pendingNum > 0 && (
               <Pressable
@@ -718,6 +801,12 @@ const styles = StyleSheet.create({
   annTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
   annBody: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
   annDate: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
+  fellowRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, borderBottomWidth: 1 },
+  fellowDot: { width: 8, height: 8, borderRadius: 4 },
+  fellowName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  fellowMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  fellowActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  fellowBtn: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   emptyState: { alignItems: "center", gap: 8, paddingVertical: 20 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });

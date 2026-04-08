@@ -92,7 +92,9 @@ export default function ProfileScreen() {
         </View>
         <Text style={[styles.userName, { color: theme.text }]}>{user?.name}</Text>
         <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{user?.email}</Text>
-        <Badge label={roleLabel} variant={roleBadge as any} />
+        <View style={styles.roleBadgeWrap}>
+          <Badge label={roleLabel} variant={roleBadge as any} />
+        </View>
       </View>
 
       {/* Info Card */}
@@ -163,6 +165,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 32, fontFamily: "Inter_700Bold" },
   userName: { fontSize: 22, fontFamily: "Inter_700Bold" },
   userEmail: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  roleBadgeWrap: { alignSelf: "center", alignItems: "center" },
   card: { marginHorizontal: 20, marginBottom: 12 },
   cardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 10 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1 },

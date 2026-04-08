@@ -12,7 +12,6 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth, useApiRequest } from "@/context/AuthContext";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
-import { useDebounce } from "@/hooks/useDebounce";
 
 const PAGE_SIZE = 50;
 
@@ -539,7 +538,9 @@ export default function AttendanceTab() {
   const request = useApiRequest();
   const qc = useQueryClient();
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchNonce, setSearchNonce] = useState(0);
   const [page, setPage] = useState(0);
   const [allStudents, setAllStudents] = useState<any[]>(() => qc.getQueryData<any[]>(["students-att-cache"]) || []);
   const [hasMore, setHasMore] = useState(true);
@@ -547,8 +548,7 @@ export default function AttendanceTab() {
   const [loading, setLoading] = useState(() => !(qc.getQueryData<any[]>(["students-att-cache"])?.length));
   const [activating, setActivating] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const debouncedSearch = useDebounce(search, 300);
-
+  const hasSearchQuery = searchQuery.trim().length > 0;
   const requiresShift = isVolunteer && !isSuperAdmin;
 
   const fetchStudentsRef = React.useRef<((reset?: boolean, silent?: boolean) => void) | null>(null);
@@ -572,13 +572,20 @@ export default function AttendanceTab() {
   const fetchStudents = useCallback(async (reset = false, silent = false) => {
     if (isStudent) return;
     if (!canWork) { setHasMore(false); return; }
+    if (!searchQuery.trim()) {
+      setAllStudents([]);
+      setHasMore(false);
+      setPage(0);
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!hasMore && !reset) return;
     const offset = reset ? 0 : page * PAGE_SIZE;
     if (reset) { setHasMore(true); }
     if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
       const data = await request(`/students?${params}`);
       const list: any[] = Array.isArray(data) ? data : (data.students || data.data || []);
       setAllStudents(prev => reset ? list : [...prev, ...list]);
@@ -588,15 +595,16 @@ export default function AttendanceTab() {
       else setPage(1);
     } catch { }
     if (!silent) setLoading(false);
-  }, [isStudent, request, debouncedSearch, page, hasMore, canWork, qc]);
+  }, [isStudent, request, searchQuery, searchNonce, page, hasMore, canWork, qc]);
 
   useEffect(() => { fetchStudentsRef.current = fetchStudents; }, [fetchStudents]);
 
   const onRefresh = useCallback(async () => {
+    if (!searchQuery.trim()) { setRefreshing(false); return; }
     setRefreshing(true);
     await fetchStudents(true);
     setRefreshing(false);
-  }, [fetchStudents]);
+  }, [fetchStudents, searchQuery]);
 
   const handleStudentDataChanged = useCallback((studentId: string, patch: Partial<Student>) => {
     setAllStudents(prev => prev.map(s => (s.id === studentId ? { ...s, ...patch } : s)));
@@ -611,7 +619,12 @@ export default function AttendanceTab() {
       return;
     }
     fetchStudents(true);
-  }, [isStudent, debouncedSearch, canWork]);
+  }, [isStudent, searchQuery, searchNonce, canWork]);
+
+  const submitSearch = useCallback(() => {
+    setSearchQuery(searchInput.trim());
+    setSearchNonce((n) => n + 1);
+  }, [searchInput]);
 
   useEffect(() => {
     if (isStudent || !canWork) return;
@@ -652,18 +665,30 @@ export default function AttendanceTab() {
           <TextInput
             placeholder="Search by name, room, roll…"
             placeholderTextColor={theme.textTertiary}
-            value={search}
-            onChangeText={setSearch}
+            value={searchInput}
+            onChangeText={setSearchInput}
             style={[styles.searchInput, { color: theme.text }]}
             clearButtonMode="while-editing"
             returnKeyType="search"
+            onSubmitEditing={submitSearch}
           />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+          {searchInput.length > 0 && (
+            <Pressable onPress={() => { setSearchInput(""); setSearchQuery(""); setSearchNonce((n) => n + 1); }} hitSlop={8}>
               <Feather name="x-circle" size={15} color={theme.textSecondary} />
             </Pressable>
           )}
+          <Pressable
+            onPress={submitSearch}
+            style={{ backgroundColor: theme.tint + "20", borderWidth: 1, borderColor: theme.tint + "55", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+          >
+            <Text style={{ color: theme.tint, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Search</Text>
+          </Pressable>
         </View>
+        {!hasSearchQuery && (
+          <Text style={{ color: theme.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+            Enter name, roll or room and press Search.
+          </Text>
+        )}
       </View>
 
       <FlatList
@@ -692,7 +717,7 @@ export default function AttendanceTab() {
         ) : (
           <View style={styles.emptyState}>
             <Feather name="users" size={48} color={theme.textTertiary} />
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No students found</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>{hasSearchQuery ? "No students found" : "Search to load students"}</Text>
           </View>
         )}
         ListFooterComponent={() => loading && allStudents.length > 0 ? (

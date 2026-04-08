@@ -1,14 +1,16 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, FlatList, StyleSheet, Pressable, Modal, ScrollView,
   Platform, useColorScheme, ActivityIndicator, RefreshControl, Alert,
-  TextInput,
+  TextInput, Share, Linking,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import Constants from "expo-constants";
 import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
@@ -18,6 +20,7 @@ const API_BASE: string =
   process.env.EXPO_PUBLIC_API_URL ||
   (Constants.expoConfig?.extra?.apiUrl as string) ||
   PROD_API;
+const LIVE_REFRESH_MS = 5000;
 
 const LOG_TYPES: Record<string, { icon: string; color: string; label: string }> = {
   active:    { icon: "sun",           color: "#22c55e", label: "Went Active" },
@@ -61,12 +64,54 @@ function StaffProfileModal({ staffId, visible, onClose, theme, token }: {
   const request = useApiRequest();
   const [refreshing, setRefreshing] = useState(false);
 
+  const downloadFile = async (url: string, filename: string) => {
+    if (Platform.OS === "web") {
+      fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.blob())
+        .then((blob) => {
+          const u = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = u;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(u);
+        })
+        .catch(() => Alert.alert("Error", "Download failed"));
+      return;
+    }
+
+    try {
+      const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      if (!dir) throw new Error("No writable directory available");
+      const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const fileUri = `${dir}${Date.now()}-${safeName}`;
+      const result = await FileSystem.downloadAsync(url, fileUri, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(result.uri, {
+          mimeType: filename.endsWith(".pdf") ? "application/pdf" : "text/csv",
+          dialogTitle: `Export ${filename}`,
+        });
+      } else {
+        await Share.share({ message: `Saved: ${result.uri}`, url: result.uri, title: filename });
+      }
+    } catch (e: any) {
+      Alert.alert("Download failed", e?.message || "Could not download file on this device");
+    }
+  };
+
   const { data, isLoading, refetch } = useQuery<{ staff: any; logs: any[]; total: number }>({
     queryKey: ["staff-profile", staffId],
     queryFn: () => request(`/staff/${staffId}/logs?limit=200`),
     enabled: visible && !!staffId,
-    refetchInterval: 15000,
-    staleTime: 5000,
+    refetchInterval: LIVE_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: "always",
+    staleTime: 1000,
   });
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
@@ -74,32 +119,28 @@ function StaffProfileModal({ staffId, visible, onClose, theme, token }: {
   const downloadCSV = () => {
     Haptics.selectionAsync();
     const url = `${API_BASE}/export/timelogs?userId=${staffId}`;
-    if (Platform.OS === "web") {
-      fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.blob())
-        .then(blob => {
-          const u = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = u; a.download = `staff-${data?.staff?.name || staffId}-logs.csv`; a.click();
-          URL.revokeObjectURL(u);
-        }).catch(() => Alert.alert("Error", "Download failed"));
-    } else {
-      Alert.alert("Download", "Available on web version.");
-    }
+    downloadFile(url, `staff-${data?.staff?.name || staffId}-logs.csv`);
   };
 
   const staff = data?.staff;
   const logs = data?.logs || [];
+  const phone = staff?.contactNumber || staff?.phone || "";
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={[styles.modalSheet, { backgroundColor: theme.surface }]} onPress={e => e.stopPropagation()}>
+      <View style={styles.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
           <View style={styles.modalHandle} />
           {isLoading ? (
             <ActivityIndicator color={theme.tint} style={{ marginTop: 40 }} />
           ) : staff ? (
-            <>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              contentContainerStyle={{ paddingBottom: 8 }}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* Staff header */}
               <View style={styles.staffHeader}>
                 <View style={[styles.staffAvatar, { backgroundColor: theme.tint + "20" }]}>
@@ -117,6 +158,19 @@ function StaffProfileModal({ staffId, visible, onClose, theme, token }: {
                   </Text>
                 </View>
               </View>
+
+              {!!phone && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Linking.openURL(`tel:${phone}`);
+                  }}
+                  style={[styles.callBtn, { borderColor: theme.tint + "55", backgroundColor: theme.tint + "10" }]}
+                >
+                  <Feather name="phone-call" size={14} color={theme.tint} />
+                  <Text style={[styles.callBtnText, { color: theme.tint }]}>Call {phone}</Text>
+                </Pressable>
+              )}
 
               {/* Detail info row: hostel, last login, last logout */}
               {(() => {
@@ -181,35 +235,38 @@ function StaffProfileModal({ staffId, visible, onClose, theme, token }: {
                 </Pressable>
               </View>
 
-              {/* Log list */}
-              <FlatList
-                data={logs}
-                keyExtractor={l => l.id}
+              {/* Log list (scrollable in modal) */}
+              <ScrollView
                 style={{ maxHeight: 340 }}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />}
-                ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
-                ListEmptyComponent={() => (
+                contentContainerStyle={{ paddingBottom: 4 }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {logs.length === 0 ? (
                   <Text style={[{ color: theme.textSecondary, textAlign: "center", paddingVertical: 20, fontFamily: "Inter_400Regular", fontSize: 13 }]}>No logs yet</Text>
-                )}
-                renderItem={({ item }) => {
-                  const lt = LOG_TYPES[item.type] || { icon: "circle", color: "#6B7280", label: item.type };
-                  return (
-                    <View style={[styles.miniLog, { backgroundColor: theme.background, borderColor: theme.border, borderLeftColor: lt.color }]}>
-                      <View style={[styles.miniLogIcon, { backgroundColor: lt.color + "20" }]}>
-                        <Feather name={lt.icon as any} size={13} color={lt.color} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={[styles.miniLogType, { color: lt.color }]}>{lt.label}</Text>
-                          <Text style={[styles.miniLogTime, { color: theme.textTertiary }]}>{formatDate(item.createdAt)}</Text>
+                ) : (
+                  logs.map((item) => {
+                    const lt = LOG_TYPES[item.type] || { icon: "circle", color: "#6B7280", label: item.type };
+                    return (
+                      <View key={item.id} style={[styles.miniLog, { backgroundColor: theme.background, borderColor: theme.border, borderLeftColor: lt.color }]}>
+                        <View style={[styles.miniLogIcon, { backgroundColor: lt.color + "20" }]}>
+                          <Feather name={lt.icon as any} size={13} color={lt.color} />
                         </View>
-                        {item.note && <Text style={[styles.miniLogNote, { color: theme.textSecondary }]}>"{item.note}"</Text>}
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+                            <Text style={[styles.miniLogType, { color: lt.color, flexShrink: 1 }]}>{lt.label}</Text>
+                            <Text style={[styles.miniLogTime, { color: theme.textTertiary }]}>{formatDate(item.createdAt)}</Text>
+                          </View>
+                          {item.note && <Text style={[styles.miniLogNote, { color: theme.textSecondary }]}>"{item.note}"</Text>}
+                        </View>
                       </View>
-                    </View>
-                  );
-                }}
-              />
-            </>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </ScrollView>
           ) : (
             <Text style={[{ color: theme.textSecondary, textAlign: "center", padding: 40, fontFamily: "Inter_400Regular" }]}>Staff not found</Text>
           )}
@@ -217,8 +274,8 @@ function StaffProfileModal({ staffId, visible, onClose, theme, token }: {
           <Pressable onPress={onClose} style={[styles.closeBtn, { borderColor: theme.border }]}>
             <Text style={[styles.closeBtnText, { color: theme.textSecondary }]}>Close</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -239,11 +296,53 @@ export default function ActivityLogsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
+  const downloadFile = async (url: string, filename: string) => {
+    if (Platform.OS === "web") {
+      fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.blob())
+        .then((blob) => {
+          const u = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = u;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(u);
+        })
+        .catch(() => Alert.alert("Error", "Download failed"));
+      return;
+    }
+
+    try {
+      const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      if (!dir) throw new Error("No writable directory available");
+      const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const fileUri = `${dir}${Date.now()}-${safeName}`;
+      const result = await FileSystem.downloadAsync(url, fileUri, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(result.uri, {
+          mimeType: filename.endsWith(".pdf") ? "application/pdf" : "text/csv",
+          dialogTitle: `Export ${filename}`,
+        });
+      } else {
+        await Share.share({ message: `Saved: ${result.uri}`, url: result.uri, title: filename });
+      }
+    } catch (e: any) {
+      Alert.alert("Download failed", e?.message || "Could not download file on this device");
+    }
+  };
+
   const { data: logs = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ["activity-logs"],
     queryFn: () => request("/staff/logs?limit=200"),
-    refetchInterval: 15000,
-    staleTime: 8000,
+    refetchInterval: LIVE_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: "always",
+    staleTime: 1000,
   });
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
@@ -251,38 +350,24 @@ export default function ActivityLogsScreen() {
   const downloadPDF = () => {
     Haptics.selectionAsync();
     const url = `${API_BASE}/pdf/activity-logs`;
-    if (Platform.OS === "web") {
-      fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.blob())
-        .then(blob => {
-          const u = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = u; a.download = "activity-logs.pdf"; a.click();
-          URL.revokeObjectURL(u);
-        }).catch(() => Alert.alert("Error", "Download failed"));
-    } else {
-      Alert.alert("Download", "PDF download is available on web.");
-    }
+    downloadFile(url, "activity-logs.pdf");
   };
 
   const downloadCSV = () => {
     Haptics.selectionAsync();
     const url = `${API_BASE}/export/timelogs`;
-    if (Platform.OS === "web") {
-      fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.blob())
-        .then(blob => {
-          const u = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = u; a.download = "activity-logs.csv"; a.click();
-          URL.revokeObjectURL(u);
-        }).catch(() => Alert.alert("Error", "Download failed"));
-    } else {
-      Alert.alert("Download", "CSV download available on web.");
-    }
+    downloadFile(url, "activity-logs.csv");
   };
 
-  const filtered = (logs as any[]).filter(l => {
+  const orderedLogs = useMemo(() => {
+    return [...(logs as any[])].sort((a, b) => {
+      const at = new Date(a?.createdAt || 0).getTime();
+      const bt = new Date(b?.createdAt || 0).getTime();
+      return bt - at;
+    });
+  }, [logs]);
+
+  const filtered = orderedLogs.filter(l => {
     const matchFilter = filter === "all" || l.type === filter;
     const matchSearch = !search || (l.userName || "").toLowerCase().includes(search.toLowerCase()) || (l.note || "").toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
@@ -300,7 +385,7 @@ export default function ActivityLogsScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: theme.text }]}>Activity Logs</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Live · refreshes every 15s</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Live · refreshes every 5s</Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable onPress={downloadCSV} style={[styles.iconBtn, { borderColor: theme.border }]}>
@@ -450,9 +535,11 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 13, fontFamily: "Inter_700Bold", textAlign: "center" },
   statLabel: { fontSize: 10, fontFamily: "Inter_400Regular", textAlign: "center" },
   logsTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  callBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingVertical: 8, marginBottom: 10 },
+  callBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   dlBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   dlBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  miniLog: { flexDirection: "row", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1, borderLeftWidth: 3, alignItems: "flex-start" },
+  miniLog: { flexDirection: "row", gap: 10, padding: 10, borderRadius: 10, borderWidth: 1, borderLeftWidth: 3, alignItems: "flex-start", marginBottom: 6 },
   miniLogIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   miniLogType: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   miniLogTime: { fontSize: 10, fontFamily: "Inter_400Regular" },

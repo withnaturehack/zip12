@@ -7,11 +7,21 @@ const router = Router();
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 
+function parseAssignedHostelIds(raw?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function scopedHostels(caller: { role: string; hostelId: string | null; assignedHostelIds?: string | null }) {
   if (caller.role === "superadmin") return null;
   if (caller.role === "volunteer") return [caller.hostelId || ""].filter(Boolean);
-  const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-  return Array.from(new Set([...(assigned || []), caller.hostelId || ""].filter(Boolean)));
+  const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+  if (assigned.length > 0) return Array.from(new Set(assigned));
+  return [caller.hostelId || ""].filter(Boolean);
 }
 
 function canAccessHostel(scope: string[] | null, hostelId?: string | null) {
@@ -117,7 +127,10 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     }
     if (requestedHostelId) filtered = filtered.filter(r => r.hostelId === requestedHostelId);
   } else {
-    const scoped = Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+    const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+    const scoped = assigned.length > 0
+      ? Array.from(new Set(assigned))
+      : [caller.hostelId || ""].filter(Boolean);
     if (scoped.length === 0) {
       res.json([]);
       return;
@@ -154,7 +167,12 @@ router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
     ? null
     : caller.role === "volunteer"
       ? (caller.hostelId ? [caller.hostelId] : [])
-      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+      : (() => {
+        const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+        return assigned.length > 0
+          ? Array.from(new Set(assigned))
+          : (caller.hostelId ? [caller.hostelId] : []);
+      })();
 
   if (scopedHostelIds && scopedHostelIds.length === 0) {
     res.json({ cardGivenCount: 0, totalStudents: 0, total: 0 });

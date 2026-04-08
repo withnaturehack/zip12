@@ -14,7 +14,7 @@ import Colors from "@/constants/colors";
 import { useApiRequest, useAuth } from "@/context/AuthContext";
 import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -254,7 +254,7 @@ function AssignStaffModal({ hostel, visible, onClose, theme, request, queryClien
 
 // ─── Staff Detail Modal ────────────────────────────────────────────────────────
 const ROLE_LABELS: Record<string, string> = {
-  volunteer: "Volunteer", coordinator: "Coordinator", admin: "Admin", superadmin: "Super Admin",
+  volunteer: "Volunteer", coordinator: "Admin", admin: "Admin", superadmin: "Super Admin",
 };
 function StaffDetailModal({ staff, visible, onClose, theme }: { staff: any; visible: boolean; onClose: () => void; theme: any }) {
   if (!staff) return null;

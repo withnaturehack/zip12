@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Modal,
   TextInput, ActivityIndicator, Alert, RefreshControl,
@@ -26,7 +26,7 @@ const ROLE_COLORS: Record<StaffRole, string> = {
 
 const ROLE_LABELS: Record<StaffRole, string> = {
   volunteer: "Volunteer",
-  coordinator: "Coordinator",
+  coordinator: "Admin",
   admin: "Admin",
   superadmin: "Super Admin",
 };
@@ -104,6 +104,7 @@ export default function ManageAdminsScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.refetchQueries({ queryKey: ["admin-users"] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
       queryClient.invalidateQueries({ queryKey: ["hostels"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-simple"] });
@@ -269,6 +270,10 @@ export default function ManageAdminsScreen() {
             const assignedNames = assignedIds.map((id: string) =>
               (hostels as any[])?.find((h: any) => h.id === id)?.name || id
             ).join(", ");
+            const currentHostelName = member.hostelId
+              ? ((hostels as any[])?.find((h: any) => h.id === member.hostelId)?.name || member.hostelId)
+              : "";
+            const displayHostel = member.role === "volunteer" ? currentHostelName : assignedNames;
             const isOnline = member.lastActiveAt &&
               Date.now() - new Date(member.lastActiveAt).getTime() < 10 * 60 * 1000;
 
@@ -303,12 +308,12 @@ export default function ManageAdminsScreen() {
                     </Pressable>
                   </View>
                 </View>
-                {(member.hostelName || assignedNames) ? (
+                {displayHostel ? (
                   <View style={[styles.hostelRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Feather name="home" size={13} color={theme.textTertiary} />
                     <Text style={[styles.hostelText, { color: theme.textSecondary }]} numberOfLines={2}>
-                      {member.hostelName || assignedNames}
-                      {assignedNames && !member.hostelName && assignedIds.length > 1 ? ` (${assignedIds.length} hostels)` : ""}
+                      {displayHostel}
+                      {member.role !== "volunteer" && assignedNames && assignedIds.length > 1 ? ` (${assignedIds.length} hostels)` : ""}
                     </Text>
                   </View>
                 ) : (
@@ -316,6 +321,12 @@ export default function ManageAdminsScreen() {
                     <Feather name="alert-circle" size={13} color="#F5A623" />
                     <Text style={[styles.hostelText, { color: "#F5A623" }]}>Tap to assign hostel</Text>
                   </Pressable>
+                )}
+                {!!member.area && (
+                  <View style={[styles.hostelRow, { backgroundColor: theme.surface, borderColor: theme.border, marginTop: 6 }]}>
+                    <Feather name="map-pin" size={13} color={theme.textTertiary} />
+                    <Text style={[styles.hostelText, { color: theme.textSecondary }]} numberOfLines={1}>{member.area}</Text>
+                  </View>
                 )}
               </AnimatedCard>
             );
@@ -451,7 +462,7 @@ export default function ManageAdminsScreen() {
         <View style={[styles.modal, { backgroundColor: theme.background }]}>
           <View style={[styles.modalHeader, { borderColor: theme.border, paddingTop: (isWeb ? 20 : insets.top) + 12 }]}>
             <View>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Assign Hostel</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Assign Hostel & Area</Text>
               {selectedStaff && (
                 <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
                   {selectedStaff.name} · {ROLE_LABELS[selectedStaff.role as StaffRole] || selectedStaff.role}
@@ -595,6 +606,13 @@ function AssignHostelForm({
   const isVolunteer = staff?.role === "volunteer";
   const [selectedId, setSelectedId] = useState<string>(staff?.hostelId || "");
   const [selectedIds, setSelectedIds] = useState<string[]>(staff?.assignedHostelIds || []);
+  const [area, setArea] = useState<string>(staff?.area || "");
+
+  useEffect(() => {
+    setSelectedId(staff?.hostelId || "");
+    setSelectedIds(staff?.assignedHostelIds || []);
+    setArea(staff?.area || "");
+  }, [staff?.id, staff?.hostelId, staff?.assignedHostelIds, staff?.area]);
 
   return (
     <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
@@ -652,12 +670,21 @@ function AssignHostelForm({
         </View>
       )}
 
+      <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Area</Text>
+      <TextInput
+        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
+        value={area}
+        onChangeText={setArea}
+        placeholder="Set area for this staff"
+        placeholderTextColor={theme.textTertiary}
+      />
+
       <Pressable
         onPress={() => {
           if (isVolunteer) {
-            onAssign({ hostelId: selectedId || null });
+            onAssign({ hostelId: selectedId || null, area: area.trim() || null });
           } else {
-            onAssign({ assignedHostelIds: selectedIds });
+            onAssign({ hostelId: null, assignedHostelIds: selectedIds, area: area.trim() || null });
           }
         }}
         style={[styles.submitBtn, { backgroundColor: theme.tint }]}

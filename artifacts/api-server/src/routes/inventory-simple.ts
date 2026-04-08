@@ -7,6 +7,15 @@ const router = Router();
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 
+function parseAssignedHostelIds(raw?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 // Auto-compute inventoryLocked: locked when all given items are also submitted
 function computeLocked(inv: {
   mattress: boolean | null; bedsheet: boolean | null; pillow: boolean | null;
@@ -35,8 +44,10 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   } else if (role === "volunteer") {
     scopedHostelIds = caller.hostelId ? [caller.hostelId] : [];
   } else if (COORDINATOR_ROLES.includes(role as any)) {
-    const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-    scopedHostelIds = Array.from(new Set([...assigned, caller.hostelId || ""].filter(Boolean)));
+    const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+    scopedHostelIds = assigned.length > 0
+      ? Array.from(new Set(assigned))
+      : (caller.hostelId ? [caller.hostelId] : []);
   } else {
     scopedHostelIds = [];
   }

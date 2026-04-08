@@ -5,6 +5,15 @@ import { requireAuth, AuthRequest, COORDINATOR_ROLES } from "../lib/auth.js";
 
 const router = Router();
 
+function parseAssignedHostelIds(raw?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 // GET /api/search?q=&limit=20&offset=0
 router.get("/", requireAuth, async (req: AuthRequest, res) => {
   const q = ((req.query.q as string) || "").trim().toLowerCase();
@@ -37,8 +46,10 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
   if (caller.role === "volunteer") {
     allUsers = allUsers.filter(u => u.hostelId === caller.hostelId && u.role === "student");
   } else if (caller.role === "coordinator" || caller.role === "admin") {
-    const assignedIds = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-    const scoped = Array.from(new Set([...assignedIds, caller.hostelId || ""].filter(Boolean)));
+    const assignedIds = parseAssignedHostelIds(caller.assignedHostelIds);
+    const scoped = assignedIds.length > 0
+      ? Array.from(new Set(assignedIds))
+      : (caller.hostelId ? [caller.hostelId] : []);
     if (scoped.length === 0) {
       res.json({ results: [], total: 0, limit, offset });
       return;

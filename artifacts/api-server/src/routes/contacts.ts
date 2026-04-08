@@ -16,7 +16,9 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
 
   const role = user.role || "";
   const assigned = JSON.parse(user.assignedHostelIds || "[]") as string[];
-  const scoped = Array.from(new Set([...assigned, user.hostelId || ""].filter(Boolean)));
+  const scoped = assigned.length > 0
+    ? Array.from(new Set(assigned.filter(Boolean)))
+    : [user.hostelId || ""].filter(Boolean);
 
   let targetHostelId = "";
   if (role === "superadmin") {
@@ -26,7 +28,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
       res.json([]);
       return;
     }
-    targetHostelId = queryHostelId || user.hostelId || scoped[0] || "";
+    targetHostelId = queryHostelId || scoped[0] || "";
   }
 
   const allContacts = await db.select().from(emergencyContactsTable);

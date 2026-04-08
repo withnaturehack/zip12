@@ -7,6 +7,15 @@ const router = Router();
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 
+function parseAssignedHostelIds(raw?: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 // GET /api/attendance?hostelId=&date= — returns students with attendance + inventory data
 router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
   const { hostelId, date } = req.query;
@@ -23,7 +32,12 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
     ? null
     : caller.role === "volunteer"
       ? (caller.hostelId ? [caller.hostelId] : [])
-      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+      : (() => {
+        const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+        return assigned.length > 0
+          ? Array.from(new Set(assigned))
+          : (caller.hostelId ? [caller.hostelId] : []);
+      })();
 
   if (scopedHostelIds && scopedHostelIds.length === 0) { res.json([]); return; }
 
@@ -139,7 +153,12 @@ router.get("/stats", requireVolunteer, async (req: AuthRequest, res) => {
     ? null
     : caller.role === "volunteer"
       ? (caller.hostelId ? [caller.hostelId] : [])
-      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+      : (() => {
+        const assigned = parseAssignedHostelIds(caller.assignedHostelIds);
+        return assigned.length > 0
+          ? Array.from(new Set(assigned))
+          : (caller.hostelId ? [caller.hostelId] : []);
+      })();
 
   if (scopedHostelIds && scopedHostelIds.length === 0) {
     res.json({ date, total: 0, inCampus: 0, checkedOut: 0, pending: 0, entered: 0, notEntered: 0 });

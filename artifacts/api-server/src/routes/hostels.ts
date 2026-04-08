@@ -29,7 +29,9 @@ router.get("/", requireAuth, async (req, res) => {
     hostels = await db.select().from(hostelsTable).where(eq(hostelsTable.id, caller.hostelId));
   } else {
     const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
-    const scoped = Array.from(new Set([...assigned, caller.hostelId || ""].filter(Boolean)));
+    const scoped = assigned.length > 0
+      ? Array.from(new Set(assigned.filter(Boolean)))
+      : [caller.hostelId || ""].filter(Boolean);
     if (scoped.length === 0) {
       res.json([]);
       return;
@@ -56,7 +58,12 @@ router.get("/:id", requireAuth, async (req, res) => {
   if (caller.role !== "superadmin") {
     const scoped = caller.role === "volunteer" || caller.role === "student"
       ? [caller.hostelId || ""].filter(Boolean)
-      : Array.from(new Set([...(JSON.parse(caller.assignedHostelIds || "[]") as string[]), caller.hostelId || ""].filter(Boolean)));
+      : (() => {
+        const assigned = JSON.parse(caller.assignedHostelIds || "[]") as string[];
+        return assigned.length > 0
+          ? Array.from(new Set(assigned.filter(Boolean)))
+          : [caller.hostelId || ""].filter(Boolean);
+      })();
 
     if (!scoped.includes(req.params.id)) {
       res.status(403).json({ error: "Forbidden", message: "Hostel not in your assigned scope" });
