@@ -29,7 +29,7 @@ router.get("/", requireAuth, async (req, res) => {
 });
 
 // GET /api/lostitems/:id
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   const [item] = await db.select().from(lostItemsTable).where(eq(lostItemsTable.id, req.params.id));
   if (!item) {
     res.status(404).json({ error: "Not Found" });

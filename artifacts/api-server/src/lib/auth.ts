@@ -32,7 +32,7 @@ export async function comparePassword(
   return bcrypt.compare(password, hash);
 }
 
-export interface AuthRequest extends Request {
+export interface AuthRequest extends Request<Record<string, string>> {
   userId?: string;
   userRole?: string;
 }

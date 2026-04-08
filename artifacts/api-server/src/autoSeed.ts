@@ -79,9 +79,9 @@ export async function autoSeed() {
       const [admin] = await db.select().from(usersTable).where(eq(usersTable.email, "admin@iitm.ac.in"));
       if (admin) {
         const announcementsData = [
-          { id: generateId(), title: "Welcome to CampusOps!", content: "Your centralized portal for hostel management, attendance tracking, inventory, and campus communications.", category: "general", createdBy: admin.id },
-          { id: generateId(), title: "Mess Timings", content: "Breakfast 7:00–9:00 AM | Lunch 12:00–2:00 PM | Dinner 7:00–9:30 PM", category: "hostel", createdBy: admin.id },
-          { id: generateId(), title: "Hostel Inventory Drive", content: "All students must submit mattress, bedsheet, and pillow details. Contact your hostel volunteer.", category: "hostel", createdBy: admin.id },
+          { id: generateId(), title: "Welcome to CampusOps!", content: "Your centralized portal for hostel management, attendance tracking, inventory, and campus communications.", category: "general" as const, createdBy: admin.id },
+          { id: generateId(), title: "Mess Timings", content: "Breakfast 7:00–9:00 AM | Lunch 12:00–2:00 PM | Dinner 7:00–9:30 PM", category: "hostel" as const, createdBy: admin.id },
+          { id: generateId(), title: "Hostel Inventory Drive", content: "All students must submit mattress, bedsheet, and pillow details. Contact your hostel volunteer.", category: "hostel" as const, createdBy: admin.id },
         ];
         await db.insert(announcementsTable).values(announcementsData);
         console.log("[seed] Announcements created");

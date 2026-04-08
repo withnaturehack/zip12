@@ -297,7 +297,7 @@ router.get("/", requireVolunteer, async (req: AuthRequest, res) => {
 });
 
 // GET /api/students/:id/checkins-history
-router.get("/:id/checkins-history", requireAuth, async (req, res) => {
+router.get("/:id/checkins-history", requireAuth, async (req: AuthRequest, res) => {
   const limit = Math.min(Number(req.query.limit) || 30, 200);
   const rows = await db.select({
     id: checkinsTable.id,
@@ -321,7 +321,7 @@ router.get("/:id/checkins-history", requireAuth, async (req, res) => {
 });
 
 // GET /api/students/:id
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   const [student] = await db
     .select({
       id: usersTable.id,
@@ -394,7 +394,7 @@ router.post("/", requireAdmin, async (req: AuthRequest, res) => {
   }
 
   const id = generateId();
-  const passwordHash = hashPassword(password);
+  const passwordHash = await hashPassword(password);
   const [user] = await db
     .insert(usersTable)
     .values({ id, name, email: email.toLowerCase(), passwordHash, role: "student", rollNumber, hostelId, roomNumber, phone, contactNumber, area, assignedMess })

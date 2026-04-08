@@ -78,7 +78,7 @@ router.post("/", requireVolunteer, async (req: AuthRequest, res) => {
 });
 
 // DELETE /api/announcements/:id
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, async (req: AuthRequest, res) => {
   await db.delete(announcementsTable).where(eq(announcementsTable.id, req.params.id));
   res.json({ success: true, message: "Deleted" });
 });

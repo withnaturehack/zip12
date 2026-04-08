@@ -43,7 +43,7 @@ router.get("/", requireAuth, async (req, res) => {
 });
 
 // GET /api/hostels/:id
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   const [caller] = await db.select({
     role: usersTable.role,
     hostelId: usersTable.hostelId,

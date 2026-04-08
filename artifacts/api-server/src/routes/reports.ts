@@ -200,7 +200,7 @@ router.post("/reset-password/:id", requireSuperAdmin, async (req: AuthRequest, r
 });
 
 // DELETE /api/admin/admin-users/:id
-router.delete("/admin-users/:id", requireSuperAdmin, async (req, res) => {
+router.delete("/admin-users/:id", requireSuperAdmin, async (req: AuthRequest, res) => {
   await db.delete(usersTable).where(eq(usersTable.id, req.params.id));
   res.json({ success: true });
 });
