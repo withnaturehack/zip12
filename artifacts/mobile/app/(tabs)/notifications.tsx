@@ -267,7 +267,7 @@ export default function NotificationsScreen() {
       {/* FAB — staff can post announcements from here */}
       {isCoordinator && (
         <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/admin/post-announcement"); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/admin/post-announcement" as any); }}
           style={[styles.fab, { backgroundColor: theme.tint, bottom: (isWeb ? 16 : insets.bottom) + 84 }]}
         >
           <Feather name="plus" size={22} color="#fff" />

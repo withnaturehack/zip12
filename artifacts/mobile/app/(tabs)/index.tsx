@@ -14,6 +14,8 @@ import { AnimatedCard } from "@/components/ui/AnimatedCard";
 import { Badge } from "@/components/ui/Badge";
 import { CardSkeleton } from "@/components/ui/LoadingSkeleton";
 
+const go = (path: string) => router.push(path as any);
+
 function StatBox({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
   return (
     <View style={styles.statBox}>
@@ -462,7 +464,7 @@ export default function HomeScreen() {
               iconColor="#22c55e"
               title="Today's Attendance"
               sub={new Date().toDateString()}
-              onViewAll={() => router.push("/(tabs)/lostandfound")}
+              onViewAll={() => go("/(tabs)/lostandfound")}
             >
               {attStats ? (
                 <View style={styles.statsRow}>
@@ -472,7 +474,7 @@ export default function HomeScreen() {
                 </View>
               ) : <CardSkeleton />}
               <Pressable
-                onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/lostandfound"); }}
+                onPress={() => { Haptics.selectionAsync(); go("/(tabs)/lostandfound"); }}
                 style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
               >
                 <Feather name="check-square" size={15} color="#fff" />
@@ -493,7 +495,7 @@ export default function HomeScreen() {
                 <StatBox label="Total" value={attStats?.total ?? 0} color={theme.text} theme={theme} />
               </View>
               <Pressable
-                onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/mess-card" as any); }}
+                onPress={() => { Haptics.selectionAsync(); go("/(tabs)/mess-card"); }}
                 style={[styles.actionBtn, { backgroundColor: "#f59e0b" }]}
               >
                 <Feather name="credit-card" size={15} color="#fff" />
@@ -506,7 +508,7 @@ export default function HomeScreen() {
               iconColor="#8b5cf6"
               title="Fellow Working Members"
               sub={volunteerHostelText || "Same assigned hostel"}
-              onViewAll={() => router.push("/admin/staff-status")}
+              onViewAll={() => go("/admin/staff-status")}
             >
               {fellowStaff.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -538,7 +540,7 @@ export default function HomeScreen() {
                       <Pressable
                         onPress={() => {
                           Haptics.selectionAsync();
-                          router.push("/admin/staff-status");
+                          go("/admin/staff-status");
                         }}
                         style={[styles.fellowBtn, { backgroundColor: theme.tint + "18" }]}
                         hitSlop={8}
@@ -556,9 +558,9 @@ export default function HomeScreen() {
               Quick Access
             </Text>
             <View style={styles.quickGrid}>
-              <QuickCard label="Search" icon="search" color={theme.tint} onPress={() => router.push("/admin/search")} />
-              <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => router.push("/(tabs)/lostandfound")} />
-              <QuickCard label="Inventory" icon="package" color="#f59e0b" onPress={() => router.push("/admin/inventory-table")} />
+              <QuickCard label="Search" icon="search" color={theme.tint} onPress={() => go("/admin/search")} />
+              <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => go("/(tabs)/lostandfound")} />
+              <QuickCard label="Inventory" icon="package" color="#f59e0b" onPress={() => go("/admin/inventory-table" as any)} />
               <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/mess-card' as any); }} />
             </View>
           </>
@@ -572,7 +574,7 @@ export default function HomeScreen() {
             {/* Superadmin pending approvals alert */}
             {isSuperAdmin && pendingNum > 0 && (
               <Pressable
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/admin/approvals"); }}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); go("/admin/approvals"); }}
                 style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, marginHorizontal: 20, marginBottom: 12 })}
               >
                 <View style={[styles.pendingAlert, { backgroundColor: "#ef444412", borderColor: "#ef444440" }]}>
@@ -610,7 +612,7 @@ export default function HomeScreen() {
                 iconColor="#22c55e"
                 title="Room Attendance"
                 sub={`Today · ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
-                onViewAll={() => router.push("/(tabs)/lostandfound")}
+                onViewAll={() => go("/(tabs)/lostandfound")}
               >
                 <View style={styles.statsRow}>
                   <StatBox label="Total" value={attStats.total} color={theme.text} theme={theme} />
@@ -634,7 +636,7 @@ export default function HomeScreen() {
               iconColor="#06b6d4"
               title="Inventory Status"
               sub={`Live · ${scopeLabel}`}
-              onViewAll={() => router.push("/admin/inventory-table")}
+              onViewAll={() => go("/admin/inventory-table" as any)}
             >
               <View style={styles.statsRow}>
                 <StatBox label="Total" value={invTotal} color={theme.text} theme={theme} />
@@ -665,7 +667,7 @@ export default function HomeScreen() {
                 <StatBox label="Pending" value={(attStats?.total ?? messStats?.totalStudents ?? 0) - (messStats?.cardGivenCount ?? 0)} color="#f59e0b" theme={theme} />
               </View>
               <Pressable
-                onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/mess-card" as any); }}
+                onPress={() => { Haptics.selectionAsync(); go("/(tabs)/mess-card"); }}
                 style={[styles.actionBtn, { backgroundColor: "#22c55e" }]}
               >
                 <Feather name="credit-card" size={15} color="#fff" />
@@ -678,21 +680,21 @@ export default function HomeScreen() {
               Quick Access
             </Text>
             <View style={styles.quickGrid}>
-              <QuickCard label="Students" icon="users" color={theme.tint} onPress={() => router.push("/(tabs)/hostel")} />
-              <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => router.push("/(tabs)/lostandfound")} />
+              <QuickCard label="Students" icon="users" color={theme.tint} onPress={() => go("/(tabs)/hostel")} />
+              <QuickCard label="Attendance" icon="check-square" color="#22c55e" onPress={() => go("/(tabs)/lostandfound")} />
               <QuickCard label="Mess Cards" icon="credit-card" color="#f59e0b" onPress={() => { Haptics.selectionAsync(); router.push('/(tabs)/mess-card' as any); }} />
-              <QuickCard label="Inventory" icon="package" color="#06b6d4" onPress={() => router.push("/admin/inventory-table")} />
-              <QuickCard label="Search" icon="search" color="#3b82f6" onPress={() => router.push("/admin/search")} />
-              <QuickCard label="Staff" icon="activity" color="#8b5cf6" onPress={() => router.push("/admin/staff-status")} />
-              <QuickCard label="Hostels" icon="home" color="#f59e0b" onPress={() => router.push("/admin/hostels")} />
-              <QuickCard label="Post Alert" icon="volume-2" color="#ef4444" onPress={() => router.push("/admin/post-announcement")} />
+              <QuickCard label="Inventory" icon="package" color="#06b6d4" onPress={() => go("/admin/inventory-table" as any)} />
+              <QuickCard label="Search" icon="search" color="#3b82f6" onPress={() => go("/admin/search")} />
+              <QuickCard label="Staff" icon="activity" color="#8b5cf6" onPress={() => go("/admin/staff-status")} />
+              <QuickCard label="Hostels" icon="home" color="#f59e0b" onPress={() => go("/admin/hostels")} />
+              <QuickCard label="Post Alert" icon="volume-2" color="#ef4444" onPress={() => go("/admin/post-announcement")} />
               {isSuperAdmin && <>
-                <QuickCard label="Approvals" icon="user-check" color="#ef4444" badge={pendingNum} onPress={() => router.push("/admin/approvals")} />
-                <QuickCard label="Activity Logs" icon="clock" color="#06b6d4" onPress={() => router.push("/admin/activity-logs")} />
-                <QuickCard label="CSV Import" icon="upload-cloud" color="#f59e0b" onPress={() => router.push("/admin/csv-import")} />
-                <QuickCard label="Reports" icon="download" color="#ef4444" onPress={() => router.push("/admin/reports")} />
-                <QuickCard label="Master Table" icon="database" color="#6366f1" onPress={() => router.push("/admin/master-table")} />
-                <QuickCard label="Manage Admins" icon="user-plus" color="#8b5cf6" onPress={() => router.push("/admin/manage-admins")} />
+                <QuickCard label="Approvals" icon="user-check" color="#ef4444" badge={pendingNum} onPress={() => go("/admin/approvals")} />
+                <QuickCard label="Activity Logs" icon="clock" color="#06b6d4" onPress={() => go("/admin/activity-logs")} />
+                <QuickCard label="CSV Import" icon="upload-cloud" color="#f59e0b" onPress={() => go("/admin/csv-import")} />
+                <QuickCard label="Reports" icon="download" color="#ef4444" onPress={() => go("/admin/reports")} />
+                <QuickCard label="Master Table" icon="database" color="#6366f1" onPress={() => go("/admin/master-table")} />
+                <QuickCard label="Manage Admins" icon="user-plus" color="#8b5cf6" onPress={() => go("/admin/manage-admins")} />
               </>}
             </View>
           </>
@@ -711,7 +713,7 @@ export default function HomeScreen() {
                   {user?.hostelId ? "View details & contacts" : "No hostel assigned yet"}
                 </Text>
               </View>
-              <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/hostel"); }} hitSlop={10}>
+              <Pressable onPress={() => { Haptics.selectionAsync(); go("/(tabs)/hostel"); }} hitSlop={10}>
                 <Feather name="chevron-right" size={17} color={theme.textTertiary} />
               </Pressable>
             </View>

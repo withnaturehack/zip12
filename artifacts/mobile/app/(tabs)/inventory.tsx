@@ -18,7 +18,7 @@ export default function InventoryTabScreen() {
     );
   }
 
-  return <InventoryTableScreen />;
+  return <InventoryTableScreen showBack={false} />;
 }
 
 const styles = StyleSheet.create({

@@ -206,7 +206,7 @@ function InfoRow({ icon, label, value, theme, color }: { icon: any; label: strin
 }
 
 // ─── Main Screen ───────────────────────────────────────────────────────────────
-export default function InventoryTableScreen() {
+export default function InventoryTableScreen({ showBack = true }: { showBack?: boolean }) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
@@ -228,8 +228,10 @@ export default function InventoryTableScreen() {
   );
 
   const [filter, setFilter] = useState<"all" | "pending" | "submitted" | "not_taken" | "red">("all");
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 300);
+  const [inputValue, setInputValue] = useState("");
+  const [committedSearch, setCommittedSearch] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+  const debouncedSearch = useDebounce(committedSearch, 150);
   const [activating, setActivating] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
 
@@ -320,6 +322,12 @@ export default function InventoryTableScreen() {
 
   const lastSyncAgoSec = Math.max(0, Math.floor((liveNow - dataUpdatedAt) / 1000));
 
+  const handleSearch = useCallback(() => {
+    const q = inputValue.trim();
+    setCommittedSearch(q);
+    setHasSearched(true);
+  }, [inputValue]);
+
   const goActive = async () => {
     setActivating(true);
     try {
@@ -391,9 +399,11 @@ export default function InventoryTableScreen() {
 
         {/* Title row */}
         <View style={styles.headerTop}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-            <Feather name="arrow-left" size={22} color={theme.text} />
-          </Pressable>
+          {showBack && (
+            <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+              <Feather name="arrow-left" size={22} color={theme.text} />
+            </Pressable>
+          )}
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>Inventory</Text>
             <View style={styles.liveRow}>
@@ -405,34 +415,7 @@ export default function InventoryTableScreen() {
           </View>
         </View>
 
-        {/* Filter pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {FILTERS.map(f => {
-            const active = filter === f.key;
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => { Haptics.selectionAsync(); setFilter(f.key); }}
-                style={[styles.filterPill, {
-                  backgroundColor: active ? f.color + "18" : theme.background,
-                  borderColor: active ? f.color : theme.border,
-                }]}
-              >
-                <View style={[styles.filterDot, { backgroundColor: f.color, opacity: active ? 1 : 0.45 }]} />
-                <Text style={[styles.filterPillLabel, { color: active ? f.color : theme.textSecondary }]}>
-                  {f.label}
-                </Text>
-                <View style={[styles.filterBadge, { backgroundColor: active ? f.color + "22" : theme.border }]}>
-                  <Text style={[styles.filterBadgeText, { color: active ? f.color : theme.textTertiary }]}>
-                    {f.value}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {/* Search + count row */}
+        {/* Search row — always visible */}
         <View style={styles.searchRow}>
           <View style={[styles.searchBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <Feather name="search" size={15} color={theme.textSecondary} />
@@ -440,48 +423,103 @@ export default function InventoryTableScreen() {
               style={[styles.searchInput, { color: theme.text }]}
               placeholder="Search by name, roll, room…"
               placeholderTextColor={theme.textTertiary}
-              value={search}
-              onChangeText={setSearch}
+              value={inputValue}
+              onChangeText={setInputValue}
               returnKeyType="search"
+              onSubmitEditing={handleSearch}
               autoCapitalize="none"
             />
-            {search.length > 0 && (
-              <Pressable onPress={() => setSearch("")} hitSlop={8}>
+            {inputValue.length > 0 && (
+              <Pressable onPress={() => { setInputValue(""); setCommittedSearch(""); setHasSearched(false); }} hitSlop={8}>
                 <Feather name="x" size={14} color={theme.textSecondary} />
               </Pressable>
             )}
           </View>
-          <View style={[styles.countBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "30" }]}>
-            <Text style={[styles.countBadgeText, { color: theme.tint }]}>{sortedItems.length}</Text>
-          </View>
           <Pressable
-            onPress={exportCSV}
-            disabled={exporting}
-            style={[styles.exportIconBtn, { backgroundColor: "#22c55e12", borderColor: "#22c55e30" }]}
-            hitSlop={8}
+            onPress={handleSearch}
+            style={[styles.searchBtn, { backgroundColor: theme.tint }]}
           >
-            {exporting
-              ? <ActivityIndicator size="small" color="#22c55e" />
-              : <Feather name="share" size={15} color="#22c55e" />}
+            <Text style={styles.searchBtnText}>Search</Text>
           </Pressable>
         </View>
 
+        {/* Filter pills + count — only after search */}
+        {hasSearched && (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+              {FILTERS.map(f => {
+                const active = filter === f.key;
+                return (
+                  <Pressable
+                    key={f.key}
+                    onPress={() => { Haptics.selectionAsync(); setFilter(f.key); }}
+                    style={[styles.filterPill, {
+                      backgroundColor: active ? f.color + "18" : theme.background,
+                      borderColor: active ? f.color : theme.border,
+                    }]}
+                  >
+                    <View style={[styles.filterDot, { backgroundColor: f.color, opacity: active ? 1 : 0.45 }]} />
+                    <Text style={[styles.filterPillLabel, { color: active ? f.color : theme.textSecondary }]}>
+                      {f.label}
+                    </Text>
+                    <View style={[styles.filterBadge, { backgroundColor: active ? f.color + "22" : theme.border }]}>
+                      <Text style={[styles.filterBadgeText, { color: active ? f.color : theme.textTertiary }]}>
+                        {f.value}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.resultCountRow}>
+              <View style={[styles.countBadge, { backgroundColor: theme.tint + "15", borderColor: theme.tint + "30" }]}>
+                <Text style={[styles.countBadgeText, { color: theme.tint }]}>{sortedItems.length} found</Text>
+              </View>
+              <Pressable
+                onPress={exportCSV}
+                disabled={exporting}
+                style={[styles.exportIconBtn, { backgroundColor: "#22c55e12", borderColor: "#22c55e30" }]}
+                hitSlop={8}
+              >
+                {exporting
+                  ? <ActivityIndicator size="small" color="#22c55e" />
+                  : <Feather name="share" size={15} color="#22c55e" />}
+              </Pressable>
+            </View>
+          </>
+        )}
+
       </View>
+
+      {/* ── Pre-search placeholder ── */}
+      {!hasSearched && (
+        <View style={styles.preSearchPlaceholder}>
+          <Feather name="search" size={48} color={theme.textTertiary} />
+          <Text style={[styles.preSearchTitle, { color: theme.text }]}>Search for Students</Text>
+          <Text style={[styles.preSearchSub, { color: theme.textSecondary }]}>
+            Type a name, roll number, or room number above and tap Search to view inventory.
+          </Text>
+        </View>
+      )}
 
       {/* ── Table header ── */}
-      <View style={[styles.tableHead, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <Text style={[styles.thName, { color: theme.textSecondary }]}>STUDENT</Text>
-        <Text style={[styles.thStatus, { color: theme.textSecondary }]}>STATUS</Text>
-        <View style={styles.thItems}>
-          {["M", "B", "P"].map(h => (
-            <Text key={h} style={[styles.thItem, { color: theme.textSecondary }]}>{h}</Text>
-          ))}
+      {hasSearched && (
+        <View style={[styles.tableHead, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+          <Text style={[styles.thName, { color: theme.textSecondary }]}>STUDENT</Text>
+          <Text style={[styles.thStatus, { color: theme.textSecondary }]}>STATUS</Text>
+          <View style={styles.thItems}>
+            {["M", "B", "P"].map(h => (
+              <Text key={h} style={[styles.thItem, { color: theme.textSecondary }]}>{h}</Text>
+            ))}
+          </View>
         </View>
-      </View>
+      )}
 
-      {isLoading && items.length === 0 ? (
+      {hasSearched && isLoading && items.length === 0 && (
         <View style={{ padding: 20 }}><CardSkeleton /><CardSkeleton /><CardSkeleton /></View>
-      ) : (
+      )}
+
+      {hasSearched && !(isLoading && items.length === 0) && (
         <FlatList
           data={sortedItems}
           keyExtractor={(i, idx) => {
@@ -652,8 +690,14 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10,
   },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
-  countBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  searchBtn: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 11, alignItems: "center", justifyContent: "center" },
+  searchBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  resultCountRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingTop: 4 },
+  countBadge: { flex: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   countBadgeText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  preSearchPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 },
+  preSearchTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
+  preSearchSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
   tableHead: {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1,
