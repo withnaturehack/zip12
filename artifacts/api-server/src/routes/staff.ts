@@ -93,9 +93,7 @@ router.get("/active-list", requireAdmin, async (req: AuthRequest, res) => {
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
   const scopedIds = scopedHostelIdsForCaller(caller);
 
-  const roleWhere = caller.role === "superadmin"
-    ? sql`users.role IN ('volunteer','coordinator','admin','superadmin')`
-    : sql`users.role = 'volunteer'`;
+  const roleWhere = sql`users.role IN ('volunteer','coordinator','admin','superadmin')`;
 
   const staff = await db.select({
     id: usersTable.id,
@@ -159,9 +157,7 @@ router.get("/all", requireVolunteer, async (req: AuthRequest, res) => {
   if (!caller) { res.status(401).json({ message: "Unauthorized" }); return; }
   const scopedIds = scopedHostelIdsForCaller(caller);
 
-  const roleWhere = caller.role === "superadmin"
-    ? sql`users.role IN ('volunteer','coordinator','admin','superadmin')`
-    : sql`users.role = 'volunteer'`;
+  const roleWhere = sql`users.role IN ('volunteer','coordinator','admin','superadmin')`;
 
   const staff = await db.select({
     id: usersTable.id,
