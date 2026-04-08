@@ -110,7 +110,13 @@ router.get("/active-list", requireAdmin, async (req: AuthRequest, res) => {
     .where(sql`${roleWhere} AND last_active_at > NOW() - INTERVAL '10 minutes'`)
     .orderBy(desc(usersTable.lastActiveAt));
 
-  const filtered = scopedIds ? staff.filter(s => scopedIds.includes(s.hostelId || "")) : staff;
+  const filtered = scopedIds
+    ? staff.filter(s =>
+        s.role === "volunteer"
+          ? scopedIds.includes(s.hostelId || "")
+          : true
+      )
+    : staff;
   res.json(filtered.map(s => ({ ...s, isOnline: true, lastActiveAt: s.lastActiveAt?.toISOString() || null })));
 });
 
@@ -181,7 +187,13 @@ router.get("/all", requireVolunteer, async (req: AuthRequest, res) => {
     .where(roleWhere)
     .orderBy(usersTable.role, usersTable.name);
 
-  const filtered = scopedIds ? staff.filter(s => scopedIds.includes(s.hostelId || "")) : staff;
+  const filtered = scopedIds
+    ? staff.filter(s =>
+        s.role === "volunteer"
+          ? scopedIds.includes(s.hostelId || "")
+          : true
+      )
+    : staff;
   res.json(filtered.map(s => ({
     ...s,
     isOnline: isOnline(s.lastActiveAt),
