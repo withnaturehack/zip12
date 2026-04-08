@@ -29,6 +29,7 @@ export interface User {
   mobileNumber?: string;
   area?: string;
   hostelId?: string;
+  hostelName?: string;
   roomNumber?: string;
   assignedMess?: string;
   attendanceStatus?: string;

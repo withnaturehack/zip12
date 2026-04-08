@@ -32,6 +32,30 @@ export default function ProfileScreen() {
   });
   const pendingNum = pendingCount?.count ?? 0;
 
+  const { data: hostelsList = [] } = useQuery<any[]>({
+    queryKey: ["hostels"],
+    queryFn: () => request("/hostels"),
+    enabled: isVolunteer,
+    staleTime: 60000,
+  });
+
+  const assignedHostelIds: string[] = React.useMemo(() => {
+    try {
+      const raw = user?.assignedHostelIds;
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+    } catch { return []; }
+  }, [user?.assignedHostelIds]);
+
+  const assignedHostelNames = React.useMemo(() => {
+    if (!assignedHostelIds.length) return "";
+    return assignedHostelIds
+      .map(id => (hostelsList as any[]).find((h: any) => h.id === id)?.name || id)
+      .join(", ");
+  }, [assignedHostelIds, hostelsList]);
+
   const handleLogout = () => {
     if (Platform.OS === "web") {
       // On web, Alert.alert works but confirm dialog is cleaner
@@ -103,10 +127,16 @@ export default function ProfileScreen() {
         {[
           { icon: "hash", label: "Roll Number", val: user?.rollNumber },
           { icon: "phone", label: "Contact", val: user?.contactNumber || user?.phone },
-          { icon: "map-pin", label: "Area", val: user?.area },
           ...(isStudent ? [
             { icon: "home", label: "Room", val: user?.roomNumber },
             { icon: "coffee", label: "Mess", val: user?.assignedMess },
+          ] : []),
+          ...(!isStudent ? [
+            { icon: "home", label: "Hostel", val: user?.hostelName || (user?.hostelId ? user.hostelId : undefined) },
+            { icon: "map-pin", label: "Area", val: user?.area },
+            ...(isCoordinator ? [
+              { icon: "layers", label: "Assigned Hostels", val: assignedHostelNames || undefined },
+            ] : []),
           ] : []),
         ]
           .filter(r => r.val)
@@ -114,9 +144,17 @@ export default function ProfileScreen() {
             <View key={r.label} style={[styles.infoRow, { borderBottomColor: theme.border }]}>
               <Feather name={r.icon as any} size={14} color={theme.tint} />
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{r.label}</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{r.val}</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]} numberOfLines={2}>{r.val}</Text>
             </View>
           ))}
+        {!isStudent && (
+          <View style={[styles.managedNote, { borderTopColor: theme.border }]}>
+            <Feather name="info" size={11} color={theme.textTertiary} />
+            <Text style={[styles.managedNoteText, { color: theme.textTertiary }]}>
+              Hostel & area assignment is managed by Super Admin
+            </Text>
+          </View>
+        )}
       </AnimatedCard>
 
       {/* STAFF TOOLS */}
@@ -178,4 +216,6 @@ const styles = StyleSheet.create({
   logoutText: { color: "#ef4444", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   menuBadge: { backgroundColor: "#ef4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, marginRight: 4 },
   menuBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
+  managedNote: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 10, marginTop: 6, borderTopWidth: 1 },
+  managedNoteText: { flex: 1, fontSize: 11, fontFamily: "Inter_400Regular" },
 });

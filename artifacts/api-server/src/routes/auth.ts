@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, hostelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   generateId,
@@ -34,11 +34,17 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Bad Request", message: "Invalid email format" });
     }
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+    const [row] = await db.select({
+      user: usersTable,
+      hostelName: hostelsTable.name,
+    }).from(usersTable)
+      .leftJoin(hostelsTable, eq(usersTable.hostelId, hostelsTable.id))
+      .where(eq(usersTable.email, email));
 
-    if (!user) {
+    if (!row) {
       return res.status(401).json({ error: "Unauthorized", message: "User not found" });
     }
+    const user = row.user;
 
     const isMatch = await comparePassword(password, user.passwordHash);
     if (!isMatch) {
@@ -66,6 +72,7 @@ router.post("/login", async (req, res) => {
         role: user.role,
         rollNumber: user.rollNumber,
         hostelId: user.hostelId,
+        hostelName: row.hostelName || null,
         roomNumber: user.roomNumber,
         phone: user.phone,
         contactNumber: user.contactNumber,
@@ -132,11 +139,17 @@ router.post("/register", async (req, res) => {
 // GET /api/auth/me
 router.get("/me", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!));
+    const [row] = await db.select({
+      user: usersTable,
+      hostelName: hostelsTable.name,
+    }).from(usersTable)
+      .leftJoin(hostelsTable, eq(usersTable.hostelId, hostelsTable.id))
+      .where(eq(usersTable.id, req.userId!));
 
-    if (!user) {
+    if (!row) {
       return res.status(404).json({ error: "Not Found", message: "User not found" });
     }
+    const user = row.user;
 
     return res.json({
       success: true,
@@ -146,6 +159,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res) => {
       role: user.role,
       rollNumber: user.rollNumber,
       hostelId: user.hostelId,
+      hostelName: row.hostelName || null,
       roomNumber: user.roomNumber,
       phone: user.phone,
       contactNumber: user.contactNumber,

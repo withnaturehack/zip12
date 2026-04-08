@@ -167,8 +167,8 @@ export default function MessCardTabScreen() {
 
   const { data, isLoading } = useQuery<any>({
     queryKey: ["mess-card-students", searchQuery, searchNonce],
-    queryFn: () => request(`/students?limit=300&offset=0${searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : ""}`),
-    enabled: canWork && hasSearchQuery,
+    queryFn: () => request(`/students?limit=500&offset=0${searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : ""}`),
+    enabled: canWork,
     refetchInterval: 8000,
     staleTime: 4000,
     gcTime: 10 * 60 * 1000,
