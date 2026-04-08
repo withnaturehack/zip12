@@ -377,7 +377,7 @@ export default function HomeScreen() {
     : "green";
 
   const isActive = myStatus?.isActive ?? false;
-  const requiresShift = isVolunteer && !isSuperAdmin;
+  const requiresShift = user?.role === "volunteer";
   const canWork = !requiresShift || isActive;
   const pendingNum = pendingCount?.count ?? 0;
 

@@ -146,7 +146,7 @@ export default function MessCardTabScreen() {
   const [selectedDetails, setSelectedDetails] = useState<any | null>(null);
   const [open, setOpen] = useState(false);
   const [activating, setActivating] = useState(false);
-  const requiresShift = isVolunteer && !isSuperAdmin;
+  const requiresShift = user?.role === "volunteer";
   const hasSearchQuery = searchQuery.trim().length > 0;
 
   useFocusEffect(
@@ -289,9 +289,9 @@ export default function MessCardTabScreen() {
         </Pressable>
       </View>
 
-      {!hasSearchQuery && (
+      {!hasSearchQuery && students.length === 0 && !isLoading && canWork && (
         <Text style={{ color: theme.textSecondary, fontSize: 12, fontFamily: "Inter_400Regular", paddingHorizontal: 16, paddingBottom: 6 }}>
-          Enter name, roll or room and press Search.
+          No students found. Try a different search.
         </Text>
       )}
 

@@ -549,7 +549,7 @@ export default function AttendanceTab() {
   const [activating, setActivating] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const hasSearchQuery = searchQuery.trim().length > 0;
-  const requiresShift = isVolunteer && !isSuperAdmin;
+  const requiresShift = user?.role === "volunteer";
 
   const fetchStudentsRef = React.useRef<((reset?: boolean, silent?: boolean) => void) | null>(null);
 

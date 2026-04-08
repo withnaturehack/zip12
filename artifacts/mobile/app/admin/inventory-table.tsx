@@ -216,7 +216,7 @@ export default function InventoryTableScreen() {
   const isCompact = !isWeb && width < 430;
   const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
   const request = useApiRequest();
-  const { isVolunteer, isSuperAdmin } = useAuth();
+  const { isVolunteer, isSuperAdmin, user } = useAuth();
   const qc = useQueryClient();
   const [exporting, setExporting] = useState(false);
 
@@ -233,7 +233,7 @@ export default function InventoryTableScreen() {
   const [activating, setActivating] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
 
-  const requiresShift = isVolunteer && !isSuperAdmin;
+  const requiresShift = user?.role === "volunteer";
   const { data: myStatus, refetch: refetchStatus } = useQuery<{ isActive: boolean; lastActiveAt: string | null }>({
     queryKey: ["my-status"],
     queryFn: async () => { try { return await request("/staff/me-status"); } catch { return { isActive: false, lastActiveAt: null }; } },
