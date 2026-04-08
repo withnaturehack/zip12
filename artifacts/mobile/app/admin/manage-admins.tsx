@@ -110,6 +110,7 @@ export default function ManageAdminsScreen() {
       queryClient.invalidateQueries({ queryKey: ["inventory-simple"] });
       queryClient.invalidateQueries({ queryKey: ["master-students"] });
       queryClient.invalidateQueries({ queryKey: ["staff"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-all"] });
       setShowAssignModal(false);
       setSelectedStaff(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -475,6 +476,7 @@ export default function ManageAdminsScreen() {
           </View>
           {selectedStaff && (
             <AssignHostelForm
+              key={selectedStaff.id}
               staff={selectedStaff}
               hostels={(hostels as any[]) || []}
               theme={theme}

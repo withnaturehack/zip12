@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   Alert, Platform, useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
@@ -20,8 +20,14 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const topPad = Platform.OS === "web" ? 24 : Math.max(insets.top + 20, 100);
-  const { user, logout, isCoordinator, isVolunteer, isSuperAdmin, isStudent } = useAuth();
+  const { user, logout, isCoordinator, isVolunteer, isSuperAdmin, isStudent, refreshUser } = useAuth();
   const request = useApiRequest();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser();
+    }, [])
+  );
 
   const { data: pendingCount } = useQuery<{ count: number }>({
     queryKey: ["pending-count"],
